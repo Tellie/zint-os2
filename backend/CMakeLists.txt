@@ -1,5 +1,5 @@
 # Copyright (C) 2008 by BogDan Vatra < bogdan@licentia.eu >
-# Copyright (C) 2009-2025 Robin Stuart <rstuart114@gmail.com>
+# Copyright (C) 2009-2026 Robin Stuart <rstuart114@gmail.com>
 # vim: set ts=4 sw=4 et :
 
 cmake_minimum_required(VERSION 3.10)
@@ -107,7 +107,7 @@ endif()
 if(NOT ZINT_SANITIZE AND ZINT_SANITIZEM AND CMAKE_C_COMPILER_ID MATCHES "Clang")
     add_compile_options(-fsanitize=memory -fsanitize-memory-track-origins -fno-omit-frame-pointer -O2)
     link_libraries(-fsanitize=memory)
-    zint_target_compile_definitions(PRIVATE ZINT_SANITIZEM)
+    zint_target_compile_definitions(PUBLIC ZINT_SANITIZEM)
 endif()
 
 if(ZINT_TEST)

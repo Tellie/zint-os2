@@ -1,7 +1,7 @@
 /***************************************************************************
  *   Copyright (C) 2008 by BogDan Vatra                                    *
  *   bogdan@licentia.eu                                                    *
- *   Copyright (C) 2010-2025 Robin Stuart                                  *
+ *   Copyright (C) 2010-2026 Robin Stuart                                  *
  *                                                                         *
  *   This program is free software: you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -42,6 +42,12 @@
 // Shorthand
 #define QSL     QStringLiteral
 #define QSEmpty QLatin1String("")
+
+#if QT_VERSION < 0x60000
+#define QZINT_SIZETYPE  int
+#else
+#define QZINT_SIZETYPE  qsizetype
+#endif
 
 namespace Zint {
     static const int maxSegs = 256;
@@ -98,9 +104,9 @@ namespace Zint {
         QColor color;
         int r, g, b, a;
         if (text.contains(',')) {
-            int comma1 = text.indexOf(',');
-            int comma2 = text.indexOf(',', comma1 + 1);
-            int comma3 = text.indexOf(',', comma2 + 1);
+            QZINT_SIZETYPE comma1 = text.indexOf(',');
+            QZINT_SIZETYPE comma2 = text.indexOf(',', comma1 + 1);
+            QZINT_SIZETYPE comma3 = text.indexOf(',', comma2 + 1);
             int black = 100 - text.mid(comma3 + 1).toInt();
             int val = 100 - text.mid(0, comma1).toInt();
             r = (int) roundf((0xFF * val * black) / 10000.0f);
@@ -117,25 +123,6 @@ namespace Zint {
         }
         color.setRgb(r, g, b, a);
         return color;
-    }
-
-    /* Helper to convert ECI combo index to ECI value */
-    static int ECIIndexToECI(const int ECIIndex) {
-        int ret;
-        if (ECIIndex >= 1 && ECIIndex <= 11) {
-            ret = ECIIndex + 2;
-        } else if (ECIIndex >= 12 && ECIIndex <= 15) {
-            ret = ECIIndex + 3;
-        } else if (ECIIndex >= 16 && ECIIndex <= 31) {
-            ret = ECIIndex + 4;
-        } else if (ECIIndex == 32) {
-            ret = 170; /* ISO 646 Invariant */
-        } else if (ECIIndex == 33) {
-            ret = 899; /* 8-bit binary data */
-        } else {
-            ret = 0;
-        }
-        return ret;
     }
 
     /* Helper to calculate max right and bottom of elements for fudging `render()` */
@@ -178,7 +165,8 @@ namespace Zint {
 
     /* Segment constructors */
     QZintSeg::QZintSeg() : m_eci(0) {}
-    QZintSeg::QZintSeg(const QString& text, const int ECIIndex) : m_text(text), m_eci(ECIIndexToECI(ECIIndex)) {}
+    QZintSeg::QZintSeg(const QString& text, const int ECIIndex)
+        : m_text(text), m_eci(QZint::ECIIndexToECIValue(ECIIndex)) {}
 
     QZint::QZint()
         : m_zintSymbol(nullptr), m_symbol(BARCODE_CODE128), m_input_mode(UNICODE_MODE),
@@ -199,7 +187,7 @@ namespace Zint {
             m_compliant_height(false),
             m_rotate_angle(0),
             m_eci(0),
-            m_gs1parens(false), m_gs1nocheck(false), m_gs1syntaxengine(false),
+            m_gs1parens(false), m_gs1nocheck(false), m_gs1raw(false), m_gs1syntaxengine(false),
             m_reader_init(false),
             m_guard_whitespace(false),
             m_embed_vector_font(false),
@@ -218,6 +206,7 @@ namespace Zint {
             ZBarcode_Delete(m_zintSymbol);
     }
 
+    /* private: Reset the symbol structure for encoding using member fields */
     bool QZint::resetSymbol() {
         m_error = 0;
         m_lastError.clear();
@@ -278,6 +267,9 @@ namespace Zint {
         if (m_gs1nocheck) {
             m_zintSymbol->input_mode |= GS1NOCHECK_MODE;
         }
+        if (m_gs1raw) {
+            m_zintSymbol->input_mode |= GS1RAW_MODE;
+        }
         if (m_gs1syntaxengine) {
             m_zintSymbol->input_mode |= GS1SYNTAXENGINE_MODE;
         }
@@ -293,13 +285,14 @@ namespace Zint {
         return true;
     }
 
+    /* private: `ZBarcode_Encode_and_Buffer_Vector()` or `ZBarcode_Encode_Segs_and_Buffer_Vector()` */
     void QZint::encode() {
         if (resetSymbol()) {
             if (m_segs.empty()) {
                 QByteArray bstr = m_text.toUtf8();
                 /* Note do our own rotation */
                 m_error = ZBarcode_Encode_and_Buffer_Vector(m_zintSymbol, (unsigned char *) bstr.data(),
-                            bstr.length(), 0);
+                            (int) bstr.length(), 0);
             } else {
                 struct zint_seg segs[maxSegs];
                 std::vector<QByteArray> bstrs;
@@ -332,6 +325,49 @@ namespace Zint {
             m_encodedOption2 = 0;
             m_encodedOption3 = 0;
             emit errored();
+        }
+    }
+
+    /* private: Helper to convert `m_segs` to `struct zint_seg[]` */
+    int QZint::convertSegs(struct zint_seg segs[], std::vector<QByteArray>& bstrs) {
+        bstrs.reserve(m_segs.size());
+        int i;
+        for (i = 0; i < (int) m_segs.size() && i < maxSegs && !m_segs[i].m_text.isEmpty(); i++) {
+            segs[i].eci = m_segs[i].m_eci;
+            bstrs.push_back(m_segs[i].m_text.toUtf8());
+            segs[i].source = (unsigned char *) bstrs.back().data();
+            segs[i].length = (int) bstrs.back().length();
+        }
+        return i;
+    }
+
+    /* private: static: Convert `zint_vector_rect->colour` to Qt color */
+    Qt::GlobalColor QZint::colourToQtColor(int colour) {
+        switch (colour) {
+            case 1: // Cyan
+                return Qt::cyan;
+                break;
+            case 2: // Blue
+                return Qt::blue;
+                break;
+            case 3: // Magenta
+                return Qt::magenta;
+                break;
+            case 4: // Red
+                return Qt::red;
+                break;
+            case 5: // Yellow
+                return Qt::yellow;
+                break;
+            case 6: // Green
+                return Qt::green;
+                break;
+            case 8: // White
+                return Qt::white;
+                break;
+            default:
+                return Qt::black;
+                break;
         }
     }
 
@@ -568,6 +604,13 @@ namespace Zint {
         }
     }
 
+    void QZint::setBorderTypeValue(int borderType) { // Sets literal value
+        if (borderType != BARCODE_BIND && borderType != BARCODE_BOX && borderType != BARCODE_BIND_TOP) {
+            borderType = 0;
+        }
+        m_borderType = borderType;
+    }
+
     /* Size of border in X-dimensions */
     int QZint::borderWidth() const {
         return m_borderWidth;
@@ -712,7 +755,7 @@ namespace Zint {
     }
 
     void QZint::setECI(int ECIIndex) { // Sets from comboBox index
-        m_eci = ECIIndexToECI(ECIIndex);
+        m_eci = ECIIndexToECIValue(ECIIndex);
     }
 
     void QZint::setECIValue(int eci) { // Sets literal value
@@ -739,6 +782,15 @@ namespace Zint {
 
     void QZint::setGS1NoCheck(bool gs1NoCheck) {
         m_gs1nocheck = gs1NoCheck;
+    }
+
+    /* Process as raw GS1 input (no brackets/parentheses), with separator GS for FNC1 */
+    bool QZint::gs1Raw() const {
+        return m_gs1raw;
+    }
+
+    void QZint::setGS1Raw(bool gs1Raw) {
+        m_gs1raw = gs1Raw;
     }
 
     /* Use GS1 Syntax Engine to validate GS1 data */
@@ -829,6 +881,14 @@ namespace Zint {
 
     int QZint::encodedOption3() const { // Read-only, encoded `option_3`
         return m_encodedOption3;
+    }
+
+    int QZint::encodedInputMode() const { // Read-only, `input_mode`
+        return m_input_mode;
+    }
+
+    int QZint::encodedOutputOptions() const { // Read-only, `output_options`
+        return m_zintSymbol->output_options;
     }
 
     /* Legacy property getters/setters */
@@ -923,7 +983,7 @@ namespace Zint {
                 break;
             default:
                 return (symbology >= BARCODE_EANX_CC && symbology <= BARCODE_DBAR_EXPSTK_CC)
-						|| symbology == BARCODE_EAN8_CC || symbology == BARCODE_EAN13_CC;
+                        || symbology == BARCODE_EAN8_CC || symbology == BARCODE_EAN13_CC;
                 break;
         }
     }
@@ -943,12 +1003,13 @@ namespace Zint {
         return m_lastError.length();
     }
 
+    /* Encode and print barcode to file `filename`. Only sets `getError()` on error, not on warning */
     bool QZint::save_to_file(const QString& filename) {
         if (resetSymbol()) {
             cpy_bytearray_left(m_zintSymbol->outfile, filename.toUtf8(), ARRAY_SIZE(m_zintSymbol->outfile) - 1);
             if (m_segs.empty()) {
                 QByteArray bstr = m_text.toUtf8();
-                m_error = ZBarcode_Encode_and_Print(m_zintSymbol, (unsigned char *) bstr.data(), bstr.length(),
+                m_error = ZBarcode_Encode_and_Print(m_zintSymbol, (unsigned char *) bstr.data(), (int) bstr.length(),
                                                     m_rotate_angle);
             } else {
                 struct zint_seg segs[maxSegs];
@@ -967,47 +1028,33 @@ namespace Zint {
         return true;
     }
 
-    /* Convert `zint_vector_rect->colour` to Qt color */
-    Qt::GlobalColor QZint::colourToQtColor(int colour) {
-        switch (colour) {
-            case 1: // Cyan
-                return Qt::cyan;
-                break;
-            case 2: // Blue
-                return Qt::blue;
-                break;
-            case 3: // Magenta
-                return Qt::magenta;
-                break;
-            case 4: // Red
-                return Qt::red;
-                break;
-            case 5: // Yellow
-                return Qt::yellow;
-                break;
-            case 6: // Green
-                return Qt::green;
-                break;
-            case 8: // White
-                return Qt::white;
-                break;
-            default:
-                return Qt::black;
-                break;
+    /* Encode and print barcode to memory file `filename` (only the extension is used, to determine output format).
+       Only sets `getError()` on error, not on warning */
+    bool QZint::save_to_memfile(const QString& filename, QByteArray& data) {
+        if (resetSymbol()) {
+            m_zintSymbol->output_options |= BARCODE_MEMORY_FILE;
+            cpy_bytearray_left(m_zintSymbol->outfile, filename.toUtf8(), ARRAY_SIZE(m_zintSymbol->outfile) - 1);
+            if (m_segs.empty()) {
+                QByteArray bstr = m_text.toUtf8();
+                m_error = ZBarcode_Encode_and_Print(m_zintSymbol, (unsigned char *) bstr.data(), (int) bstr.length(),
+                                                    m_rotate_angle);
+            } else {
+                struct zint_seg segs[maxSegs];
+                std::vector<QByteArray> bstrs;
+                int seg_count = convertSegs(segs, bstrs);
+                m_error = ZBarcode_Encode_Segs_and_Print(m_zintSymbol, segs, seg_count, m_rotate_angle);
+            }
         }
-    }
+        if (m_error >= ZINT_ERROR) {
+            m_lastError = m_zintSymbol->errtxt;
+            m_encodedWidth = m_encodedRows = 0;
+            m_encodedHeight = m_vectorWidth = m_vectorHeight = 0.0f;
+            emit errored();
+            return false;
+        }
+        data = QByteArray((const char *) m_zintSymbol->memfile, m_zintSymbol->memfile_size);
 
-    /* Helper to convert `m_segs` to `struct zint_seg[]` */
-    int QZint::convertSegs(struct zint_seg segs[], std::vector<QByteArray>& bstrs) {
-        bstrs.reserve(m_segs.size());
-        int i;
-        for (i = 0; i < (int) m_segs.size() && i < maxSegs && !m_segs[i].m_text.isEmpty(); i++) {
-            segs[i].eci = m_segs[i].m_eci;
-            bstrs.push_back(m_segs[i].m_text.toUtf8());
-            segs[i].source = (unsigned char *) bstrs.back().data();
-            segs[i].length = bstrs.back().length();
-        }
-        return i;
+        return true;
     }
 
     /* Encode and display barcode in `paintRect` using `painter`.
@@ -1231,7 +1278,45 @@ namespace Zint {
         return true;
     }
 
-    /* Return the BARCODE_XXX name of `symbology` */
+    /* static: Convert literal ECI to ECI combobox index */
+    int QZint::ECIValueToECIIndex(const int eci) {
+        int ret;
+        if (eci >= 3 && eci <= 13) {
+            ret = eci - 2;
+        } else if (eci >= 15 && eci <= 18) {
+            ret = eci - 3;
+        } else if (eci >= 20 && eci <= 35) {
+            ret = eci - 4;
+        } else if (eci == 170) {
+            ret = 32;
+        } else if (eci == 899) {
+            ret = 33;
+        } else {
+            ret = 0;
+        }
+        return ret;
+    }
+
+    /* static: Convert ECI combo index to literal ECI */
+    int QZint::ECIIndexToECIValue(const int ECIIndex) {
+        int ret;
+        if (ECIIndex >= 1 && ECIIndex <= 11) {
+            ret = ECIIndex + 2;
+        } else if (ECIIndex >= 12 && ECIIndex <= 15) {
+            ret = ECIIndex + 3;
+        } else if (ECIIndex >= 16 && ECIIndex <= 31) {
+            ret = ECIIndex + 4;
+        } else if (ECIIndex == 32) {
+            ret = 170; /* ISO 646 Invariant */
+        } else if (ECIIndex == 33) {
+            ret = 899; /* 8-bit binary data */
+        } else {
+            ret = 0;
+        }
+        return ret;
+    }
+
+    /* static: Return the BARCODE_XXX name of `symbology` */
     QString QZint::barcodeName(const int symbology) {
         char buf[32];
         if (ZBarcode_BarcodeName(symbology, buf) == 0) {
@@ -1240,17 +1325,17 @@ namespace Zint {
         return QSEmpty;
     }
 
-    /* Whether Zint library "libzint" built with PNG support or not */
+    /* static: Whether Zint library "libzint" built with PNG support or not */
     bool QZint::noPng() {
         return ZBarcode_NoPng() == 1;
     }
 
-    /* Whether Zint library "libzint" built with PNG support or not */
+    /* static: Whether Zint library "libzint" built with PNG support or not */
     bool QZint::haveGS1SyntaxEngine() {
         return ZBarcode_HaveGS1SyntaxEngine() == 1;
     }
 
-    /* Version of Zint library "libzint" linked to */
+    /* static: Version of Zint library "libzint" linked to */
     int QZint::getVersion() {
         return ZBarcode_Version();
     }
@@ -1276,6 +1361,10 @@ namespace Zint {
 
         if (isEANUPC()) {
             arg_int(cmd, "--addongap=", option2());
+        }
+
+        if (m_symbol == BARCODE_AZTEC || m_symbol == BARCODE_HIBC_AZTEC) {
+            arg_bool(cmd, "--azfull", (option3() & 0xFF) == ZINT_AZTEC_FULL);
         }
 
         if (bgStr() != QSL("FFFFFF") && !nobackground) {
@@ -1337,8 +1426,16 @@ namespace Zint {
         }
 
         if (m_symbol == BARCODE_DATAMATRIX || m_symbol == BARCODE_HIBC_DM) {
+            if (option3() & DM_B256_C40_START_MASK) {
+                arg_int(cmd, option3() & DM_B256_START ? "--dmb256=" : "--dmc40=", option1(), true /*allowZero*/);
+            }
             arg_bool(cmd, "--dmiso144", (option3() & DM_ISO_144) == DM_ISO_144);
-            arg_bool(cmd, "--dmre", (option3() & 0x7F) == DM_DMRE);
+            arg_bool(cmd, "--dmre", (option3() & DM_SQUARE_DMRE_MASK) == DM_DMRE);
+        } else if (m_symbol == BARCODE_MAILMARK_2D) {
+            /* Accessing C40_START for MAILMARK_2D not currently in GUI but may be added later */
+            if ((option3() & DM_B256_C40_START_MASK) == DM_C40_START) {
+                arg_int(cmd, "--dmc40=", option1(), true /*allowZero*/);
+            }
         }
 
         if ((m_symbol == BARCODE_DOTCODE || (isDotty() && dotty())) && dotSize() != 0.8f) {
@@ -1363,12 +1460,16 @@ namespace Zint {
 
         if (supportsGS1()) {
             bool gs1_implied = false;
+            if (gs1NoCheck() || (inputMode() & GS1NOCHECK_MODE)) {
+                arg_bool(cmd, "--gs1nocheck", (gs1_implied = true));
+            }
             if (gs1Parens() || (inputMode() & GS1PARENS_MODE)) {
                 arg_bool(cmd, "--gs1parens", (gs1_implied = true));
             }
-            if (gs1NoCheck() || (inputMode() & GS1NOCHECK_MODE)) {
-                arg_bool(cmd, "--gs1nocheck", (gs1_implied = true));
-            } else if (gs1SyntaxEngine() || (inputMode() & GS1SYNTAXENGINE_MODE)) {
+            if (gs1Raw() || (inputMode() & GS1RAW_MODE)) {
+                arg_bool(cmd, "--gs1raw", (gs1_implied = true));
+            }
+            if (gs1SyntaxEngine() || (inputMode() & GS1SYNTAXENGINE_MODE)) {
                 arg_bool(cmd, "--gs1strict", (gs1_implied = true));
             }
             arg_bool(cmd, "--gs1", (inputMode() & 0x07) == GS1_MODE && !gs1_implied);
@@ -1447,7 +1548,7 @@ namespace Zint {
         arg_bool(cmd, "--small", !notext && (fontSetting() & SMALL_TEXT));
 
         if (m_symbol == BARCODE_DATAMATRIX || m_symbol == BARCODE_HIBC_DM) {
-            arg_bool(cmd, "--square", (option3() & 0x7F) == DM_SQUARE);
+            arg_bool(cmd, "--square", (option3() & DM_SQUARE_DMRE_MASK) == DM_SQUARE);
         }
 
         if (supportsStructApp()) {
@@ -1470,6 +1571,7 @@ namespace Zint {
                 || m_symbol == BARCODE_QRCODE || m_symbol == BARCODE_HIBC_QR || m_symbol == BARCODE_MICROQR
                 || m_symbol == BARCODE_RMQR || m_symbol == BARCODE_GRIDMATRIX || m_symbol == BARCODE_HANXIN
                 || m_symbol == BARCODE_CHANNEL || m_symbol == BARCODE_CODEONE || m_symbol == BARCODE_CODE93
+                || m_symbol == BARCODE_TELEPEN || m_symbol == BARCODE_TELEPEN_NUM
                 || m_symbol == BARCODE_ULTRA || m_symbol == BARCODE_VIN) {
             arg_int(cmd, "--vers=", option2());
         } else if (m_symbol == BARCODE_DAFT && option2() != 250) {
@@ -1483,7 +1585,7 @@ namespace Zint {
         return cmd;
     }
 
-    /* `getAsCLI()` helpers */
+    /* private: static: `getAsCLI()` helpers */
     void QZint::arg_str(QString& cmd, const char *const opt, const QString& val) {
         if (!val.isEmpty()) {
             QByteArray bstr = val.toUtf8();
@@ -1491,18 +1593,21 @@ namespace Zint {
         }
     }
 
+    /* private: static: */
     void QZint::arg_int(QString& cmd, const char *const opt, const int val, const bool allowZero) {
         if (val > 0 || (val == 0 && allowZero)) {
             cmd += QString::asprintf(" %s%d", opt, val);
         }
     }
 
+    /* private: static: */
     void QZint::arg_bool(QString& cmd, const char *const opt, const bool val) {
         if (val) {
             cmd += QString::asprintf(" %s", opt);
         }
     }
 
+    /* private: static: */
     void QZint::arg_data(QString& cmd, const char *const opt, const QString& val, const bool win) {
         if (!val.isEmpty()) {
             QString text(val);
@@ -1510,12 +1615,14 @@ namespace Zint {
         }
     }
 
+    /* private: static: */
     void QZint::arg_seg(QString& cmd, const int seg_no, const QZintSeg& val, const bool win) {
         QString text(val.m_text);
         QString opt = QString::asprintf("--seg%d=%d,", seg_no, val.m_eci);
         arg_data_esc(cmd, opt.toUtf8(), text, win);
     }
 
+    /* private: static: */
     void QZint::arg_data_esc(QString& cmd, const char *const opt, QString& text, const bool win) {
         const char delim = win ? '"' : '\'';
         if (win) {
@@ -1532,12 +1639,14 @@ namespace Zint {
         }
     }
 
+    /* private: static: */
     void QZint::arg_float(QString& cmd, const char *const opt, const float val, const bool allowZero) {
         if (val > 0 || (val == 0 && allowZero)) {
             cmd += QString::asprintf(" %s%g", opt, val);
         }
     }
 
+    /* private: static: */
     void QZint::arg_structapp(QString& cmd, const char *const opt, const int count, const int index,
                                 const QString& id, const bool win) {
         if (count >= 2 && index >= 1) {
@@ -1551,6 +1660,7 @@ namespace Zint {
         }
     }
 
+    /* private: static: */
     void QZint::arg_scalexdimdp(QString& cmd, const char *const opt, const float scale, const float dpmm,
                                 const int symbol, const QZintXdimDpVars *xdimdpVars) {
         if (dpmm) {
@@ -1573,7 +1683,7 @@ namespace Zint {
         }
     }
 
-    /* Helper to return "GIF"/"SVG"(/"EMF") if `msg` false, "raster"/"vector"(/"EMF") otherwise
+    /* static: Helper to return "GIF"/"SVG"(/"EMF") if `msg` false, "raster"/"vector"(/"EMF") otherwise
        (EMF only if `symbol` is MaxiCode) */
     const char *QZintXdimDpVars::getFileType(int symbol, const struct QZintXdimDpVars *vars, bool msg) {
         static const char *filetypes[3] = { "GIF", "SVG", "EMF" };
@@ -1581,8 +1691,9 @@ namespace Zint {
 
         if (!vars) return "";
 
-        const int idx = std::max(std::min(symbol == BARCODE_MAXICODE ? vars->filetype_maxicode
-                                                                                : vars->filetype, 2), 0);
+        const int filetype = symbol == BARCODE_MAXICODE ? vars->filetype_maxicode : vars->filetype;
+        const int max = symbol == BARCODE_MAXICODE ? 2 : 1;
+        const int idx = std::max(std::min(filetype, max), 0);
         return msg ? msg_types[idx] : filetypes[idx];
     }
 } /* namespace Zint */

@@ -1,7 +1,7 @@
 /* svg.c - Scalable Vector Graphics */
 /*
     libzint - the open source barcode library
-    Copyright (C) 2009-2025 Robin Stuart <rstuart114@gmail.com>
+    Copyright (C) 2009-2026 Robin Stuart <rstuart114@gmail.com>
 
     Redistribution and use in source and binary forms, with or without
     modification, are permitted provided that the following conditions
@@ -30,6 +30,7 @@
  */
 /* SPDX-License-Identifier: BSD-3-Clause */
 
+#include <assert.h>
 #include <errno.h>
 #include <math.h>
 #include <stdio.h>
@@ -58,33 +59,37 @@ static void svg_pick_colour(const int colour, char colour_code[7]) {
 
 /* Convert text to use HTML entity codes */
 static void svg_make_html_friendly(const unsigned char *string, char *html_version) {
-
+    static const char gt[4] =   { '&','g','t',';' };
+    static const char lt[4] =   { '&','l','t',';' };
+    static const char amp[5] =  { '&','a','m','p',';' };
+    static const char quot[6] = { '&','q','u','o','t',';' };
+    static const char apos[6] = { '&','a','p','o','s',';' };
     /* `NOLINT` required due to disconnect between `symbol->text` and vector `string`s which are always <= */
     /* NOLINTBEGIN(clang-analyzer-security.ArrayBound) clang-tidy-21 false positive */
     for (; *string; string++) {
         switch (*string) {
             case '>':
-                memcpy(html_version, "&gt;", 4);
+                memcpy(html_version, gt, 4);
                 html_version += 4;
                 break;
 
             case '<':
-                memcpy(html_version, "&lt;", 4);
+                memcpy(html_version, lt, 4);
                 html_version += 4;
                 break;
 
             case '&':
-                memcpy(html_version, "&amp;", 5);
+                memcpy(html_version, amp, 5);
                 html_version += 5;
                 break;
 
             case '"':
-                memcpy(html_version, "&quot;", 6);
+                memcpy(html_version, quot, 6);
                 html_version += 6;
                 break;
 
             case '\'':
-                memcpy(html_version, "&apos;", 6);
+                memcpy(html_version, apos, 6);
                 html_version += 6;
                 break;
 
@@ -291,24 +296,14 @@ INTERNAL int zint_svg_plot(struct zint_symbol *symbol) {
         svg_put_fattrib(" cy=\"", 2, circle->y, fmp);
         svg_put_fattrib(" r=\"", circle->width ? 3 : 2, radius, fmp);
 
-        if (circle->colour) { /* Legacy - no longer used */
-            if (circle->width) {
-                zint_fm_printf(fmp, " stroke=\"#%s\"", bgcolour_string);
-                svg_put_fattrib(" stroke-width=\"", 3, circle->width, fmp);
-                zint_fm_puts(" fill=\"none\"", fmp);
-            } else {
-                zint_fm_printf(fmp, " fill=\"#%s\"", bgcolour_string);
-            }
-            /* This doesn't work how the user is likely to expect - more work needed! */
-            svg_put_opacity_close(bg_alpha, bg_alpha_opacity, 1 /*close*/, fmp);
-        } else {
-            if (circle->width) {
-                zint_fm_printf(fmp, " stroke=\"#%s\"", fgcolour_string);
-                svg_put_fattrib(" stroke-width=\"", 3, circle->width, fmp);
-                zint_fm_puts(" fill=\"none\"", fmp);
-            }
-            svg_put_opacity_close(fg_alpha, fg_alpha_opacity, 1 /*close*/, fmp);
+        assert(circle->colour == 0); /* Legacy - no longer used */
+        if (circle->width) {
+            zint_fm_printf(fmp, " stroke=\"#%s\"", fgcolour_string);
+            svg_put_fattrib(" stroke-width=\"", 3, circle->width, fmp);
+            zint_fm_puts(" fill=\"none\"", fmp);
         }
+        /* This doesn't work how the user is likely to expect - more work needed! */
+        svg_put_opacity_close(fg_alpha, fg_alpha_opacity, 1 /*close*/, fmp);
         circle = circle->next;
     }
 

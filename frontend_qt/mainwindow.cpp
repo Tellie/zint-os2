@@ -1,6 +1,6 @@
 /***************************************************************************
  *   Copyright (C) 2008 by BogDan Vatra <bogdan@licentia.eu>               *
- *   Copyright (C) 2009-2025 by Robin Stuart <rstuart114@gmail.com>        *
+ *   Copyright (C) 2009-2026 by Robin Stuart <rstuart114@gmail.com>        *
  *                                                                         *
  *   This program is free software: you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -46,25 +46,36 @@
 #include "scalewindow.h"
 #include "sequencewindow.h"
 
+#define ARRAY_SIZE(x) ((int) (sizeof(x) / sizeof((x)[0])))
+
 // Shorthand
 #define QSL     QStringLiteral
 #define QSEmpty QLatin1String("")
 
+#if QT_VERSION < 0x60000
+#define QZINT_SIZETYPE  int
+#else
+#define QZINT_SIZETYPE  qsizetype
+#endif
+
 static const int tempMessageTimeout = 2000;
 
+// Suppress gcc-16 (C23) warning -Wdeprecated-enum-enum-conversion
+#define QKC(M, K)   (int(M) | int(K))
+
 // Use on Windows also (i.e. not using QKeySequence::Quit)
-Q_GLOBAL_STATIC_WITH_ARGS(QKeySequence, quitKeySeq, (Qt::CTRL | Qt::Key_Q))
+Q_GLOBAL_STATIC_WITH_ARGS(QKeySequence, quitKeySeq, QKC(Qt::CTRL, Qt::Key_Q))
 
-Q_GLOBAL_STATIC_WITH_ARGS(QKeySequence, openCLISeq, (Qt::SHIFT | Qt::CTRL | Qt::Key_C))
+Q_GLOBAL_STATIC_WITH_ARGS(QKeySequence, openCLISeq, QKC(Qt::SHIFT | Qt::CTRL, Qt::Key_C))
 
-Q_GLOBAL_STATIC_WITH_ARGS(QKeySequence, copyBMPSeq, (Qt::SHIFT | Qt::CTRL | Qt::Key_B))
-Q_GLOBAL_STATIC_WITH_ARGS(QKeySequence, copyEMFSeq, (Qt::SHIFT | Qt::CTRL | Qt::Key_E))
-Q_GLOBAL_STATIC_WITH_ARGS(QKeySequence, copyGIFSeq, (Qt::SHIFT | Qt::CTRL | Qt::Key_G))
-Q_GLOBAL_STATIC_WITH_ARGS(QKeySequence, copyPNGSeq, (Qt::SHIFT | Qt::CTRL | Qt::Key_P))
-Q_GLOBAL_STATIC_WITH_ARGS(QKeySequence, copySVGSeq, (Qt::SHIFT | Qt::CTRL | Qt::Key_S))
-Q_GLOBAL_STATIC_WITH_ARGS(QKeySequence, copyTIFSeq, (Qt::SHIFT | Qt::CTRL | Qt::Key_T))
+Q_GLOBAL_STATIC_WITH_ARGS(QKeySequence, copyBMPSeq, QKC(Qt::SHIFT | Qt::CTRL, Qt::Key_B))
+Q_GLOBAL_STATIC_WITH_ARGS(QKeySequence, copyEMFSeq, QKC(Qt::SHIFT | Qt::CTRL, Qt::Key_E))
+Q_GLOBAL_STATIC_WITH_ARGS(QKeySequence, copyGIFSeq, QKC(Qt::SHIFT | Qt::CTRL, Qt::Key_G))
+Q_GLOBAL_STATIC_WITH_ARGS(QKeySequence, copyPNGSeq, QKC(Qt::SHIFT | Qt::CTRL, Qt::Key_P))
+Q_GLOBAL_STATIC_WITH_ARGS(QKeySequence, copySVGSeq, QKC(Qt::SHIFT | Qt::CTRL, Qt::Key_S))
+Q_GLOBAL_STATIC_WITH_ARGS(QKeySequence, copyTIFSeq, QKC(Qt::SHIFT | Qt::CTRL, Qt::Key_T))
 
-Q_GLOBAL_STATIC_WITH_ARGS(QKeySequence, factoryResetSeq, (Qt::SHIFT | Qt::CTRL | Qt::Key_R))
+Q_GLOBAL_STATIC_WITH_ARGS(QKeySequence, factoryResetSeq, QKC(Qt::SHIFT | Qt::CTRL, Qt::Key_R))
 
 // RGB hexadecimal 6 or 8 in length or CMYK comma-separated decimal percentages "C,M,Y,K"
 static const QString colorREstr(QSL("^([0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?)|(((100|[0-9]{0,2}),){3}(100|[0-9]{0,2}))$"));
@@ -88,9 +99,9 @@ static QColor str_to_qcolor(const QString &str)
     QColor color;
     int r, g, b, a;
     if (str.contains(',')) {
-        int comma1 = str.indexOf(',');
-        int comma2 = str.indexOf(',', comma1 + 1);
-        int comma3 = str.indexOf(',', comma2 + 1);
+        QZINT_SIZETYPE comma1 = str.indexOf(',');
+        QZINT_SIZETYPE comma2 = str.indexOf(',', comma1 + 1);
+        QZINT_SIZETYPE comma3 = str.indexOf(',', comma2 + 1);
         int black = 100 - str.mid(comma3 + 1).toInt();
         int val = 100 - str.mid(0, comma1).toInt();
         r = (int) roundf((0xFF * val * black) / 10000.0f);
@@ -125,7 +136,7 @@ static const struct bstyle_item bstyle_items[] = {
     { QSL("Brazilian Postal Code (CEPNet)"), BARCODE_CEPNET },
     { QSL("Channel Code"), BARCODE_CHANNEL },
     { QSL("Codabar (EN 798)"), BARCODE_CODABAR },
-    { QSL("Codablock-F (and HIBC)"), BARCODE_CODABLOCKF },
+    { QSL("Codablock F (and HIBC)"), BARCODE_CODABLOCKF },
     { QSL("Code 11"), BARCODE_CODE11 },
     { QSL("Code 128 (ISO 15417) (and GS1-128 and HIBC)"), BARCODE_CODE128 },
     { QSL("Code 16K (EN 12323)"), BARCODE_CODE16K },
@@ -184,7 +195,7 @@ static const struct bstyle_item bstyle_items[] = {
     { QSL("Royal Mail 2D Mailmark (CMDM) (Data Matrix)"), BARCODE_MAILMARK_2D },
     { QSL("Royal Mail 4-state Customer Code (RM4SCC)"), BARCODE_RM4SCC },
     { QSL("Royal Mail 4-state Mailmark"), BARCODE_MAILMARK_4S },
-    { QSL("Telepen"), BARCODE_TELEPEN },
+    { QSL("Telepen Alpha"), BARCODE_TELEPEN },
     { QSL("Telepen Numeric"), BARCODE_TELEPEN_NUM },
     { QSL("UK Plessey"), BARCODE_PLESSEY },
     { QSL("Ultracode"), BARCODE_ULTRA },
@@ -202,13 +213,13 @@ static const struct bstyle_item bstyle_items[] = {
 void MainWindow::mac_hack_vLayouts(QWidget *win)
 {
     QList<QVBoxLayout *> vlayouts = win->findChildren<QVBoxLayout *>();
-    for (int i = 0, vcnt = vlayouts.size(); i < vcnt; i++) {
+    for (int i = 0, vcnt = (int) vlayouts.size(); i < vcnt; i++) {
         if (vlayouts[i]->objectName() == "vLayoutData" || vlayouts[i]->objectName() == "vLayoutComposite"
                 || vlayouts[i]->objectName() == "vLayoutSegs") {
             vlayouts[i]->setSpacing(2);
             // If set spacing on QVBoxLayout then it seems its QHBoxLayout children inherit this so undo
             QList<QHBoxLayout *> hlayouts = vlayouts[i]->findChildren<QHBoxLayout *>();
-            for (int j = 0, hcnt = hlayouts.size(); j < hcnt; j++) {
+            for (int j = 0, hcnt = (int) hlayouts.size(); j < hcnt; j++) {
                 hlayouts[j]->setSpacing(8);
             }
         }
@@ -221,7 +232,7 @@ void MainWindow::mac_hack_statusBars(QWidget *win, const char* name)
     QList<QStatusBar *> sbars = name ? win->findChildren<QStatusBar *>(name) : win->findChildren<QStatusBar *>();
     QColor bgColor = QGuiApplication::palette().window().color();
     QString sbarSS = QSL("QStatusBar {background-color:") + bgColor.name() + QSL(";}");
-    for (int i = 0, cnt = sbars.size(); i < cnt; i++) {
+    for (int i = 0, cnt = (int) sbars.size(); i < cnt; i++) {
         sbars[i]->setStyleSheet(sbarSS);
     }
 }
@@ -229,12 +240,12 @@ void MainWindow::mac_hack_statusBars(QWidget *win, const char* name)
 
 MainWindow::MainWindow(QWidget *parent, Qt::WindowFlags fl)
         : QWidget(parent, fl), m_previewBgColor(0xF4, 0xF4, 0xF4), m_optionWidget(nullptr), m_symbology(0),
-          m_menu(nullptr),
+          m_aztecSizeIndex(-1), m_aztecECCIndex(-1), m_menu(nullptr),
           m_lblHeightPerRow(nullptr), m_spnHeightPerRow(nullptr),
           m_btnHeightPerRowDisable(nullptr), m_btnHeightPerRowDefault(nullptr),
           m_scaleWindow(nullptr)
 {
-    // Undocumented command line debug flag
+    // Command line debug flag
     m_bc.bc.setDebug(QCoreApplication::arguments().contains(QSL("--verbose")));
 
     QCoreApplication::setOrganizationName(QSL("zint"));
@@ -290,7 +301,7 @@ MainWindow::MainWindow(QWidget *parent, Qt::WindowFlags fl)
     connect(txt_fgcolor, SIGNAL(textEdited(QString)), this, SLOT(fgcolor_edited()));
     connect(txt_bgcolor, SIGNAL(textEdited(QString)), this, SLOT(bgcolor_edited()));
 
-    const int cnt = (int) (sizeof(bstyle_items) / sizeof(bstyle_items[0]));
+    const int cnt = ARRAY_SIZE(bstyle_items);
     for (int i = 0; i < cnt; i++) {
         bstyle->addItem(bstyle_items[i].text);
     }
@@ -353,6 +364,7 @@ MainWindow::MainWindow(QWidget *parent, Qt::WindowFlags fl)
     connect(chkData, SIGNAL(toggled(bool)), SLOT(update_preview()));
     connect(chkRInit, SIGNAL(toggled(bool)), SLOT(update_preview()));
     connect(chkGS1Parens, SIGNAL(toggled(bool)), SLOT(update_preview()));
+    connect(chkGS1Raw, SIGNAL(toggled(bool)), SLOT(update_preview()));
     connect(chkGS1NoCheck, SIGNAL(toggled(bool)), SLOT(update_preview()));
     if (m_bc.bc.haveGS1SyntaxEngine()) {
         chkGS1Strict->show();
@@ -467,10 +479,9 @@ MainWindow::~MainWindow()
     settings.setValue(QSL("studio/chk_data"), chkData->isChecked() ? 1 : 0);
     settings.setValue(QSL("studio/chk_rinit"), chkRInit->isChecked() ? 1 : 0);
     settings.setValue(QSL("studio/chk_gs1parens"), chkGS1Parens->isChecked() ? 1 : 0);
+    settings.setValue(QSL("studio/chk_gs1raw"), chkGS1Raw->isChecked() ? 1 : 0);
     settings.setValue(QSL("studio/chk_gs1nocheck"), chkGS1NoCheck->isChecked() ? 1 : 0);
-    if (chkGS1Strict->isVisible()) {
-        settings.setValue(QSL("studio/chk_gs1strict"), chkGS1Strict->isChecked() ? 1 : 0);
-    }
+    settings.setValue(QSL("studio/chk_gs1strict"), chkGS1Strict->isChecked() ? 1 : 0);
     settings.setValue(QSL("studio/appearance/autoheight"), chkAutoHeight->isChecked() ? 1 : 0);
     settings.setValue(QSL("studio/appearance/compliantheight"), chkCompliantHeight->isChecked() ? 1 : 0);
     settings.setValue(QSL("studio/appearance/height"), heightb->value());
@@ -541,10 +552,9 @@ void MainWindow::load_settings(QSettings &settings)
     chkData->setChecked(settings.value(QSL("studio/chk_data")).toInt() ? true : false);
     chkRInit->setChecked(settings.value(QSL("studio/chk_rinit")).toInt() ? true : false);
     chkGS1Parens->setChecked(settings.value(QSL("studio/chk_gs1parens")).toInt() ? true : false);
+    chkGS1Raw->setChecked(settings.value(QSL("studio/chk_gs1raw")).toInt() ? true : false);
     chkGS1NoCheck->setChecked(settings.value(QSL("studio/chk_gs1nocheck")).toInt() ? true : false);
-    if (chkGS1Strict->isVisible()) {
-        chkGS1Strict->setChecked(settings.value(QSL("studio/chk_gs1strict")).toInt() ? true : false);
-    }
+    chkGS1Strict->setChecked(settings.value(QSL("studio/chk_gs1strict")).toInt() ? true : false);
     chkAutoHeight->setChecked(settings.value(QSL("studio/appearance/autoheight"), 1).toInt() ? true : false);
     chkCompliantHeight->setChecked(
         settings.value(QSL("studio/appearance/compliantheight"), 1).toInt() ? true : false);
@@ -750,7 +760,7 @@ bool MainWindow::save()
     }
 
     QString nativePathname = QDir::toNativeSeparators(pathname);
-    int lastSeparator = nativePathname.lastIndexOf(QDir::separator());
+    QZINT_SIZETYPE lastSeparator = nativePathname.lastIndexOf(QDir::separator());
     QString dirname = nativePathname.mid(0, lastSeparator);
     if (dirname.isEmpty()) {
         /*: %1 is path saved to */
@@ -816,7 +826,7 @@ void MainWindow::about()
             "<p>A free barcode generator</p>"
             "<p>Instruction manual is available at the project homepage:<br>"
             "<a href=\"https://www.zint.org.uk\">https://www.zint.org.uk</a>.</p>"
-            "<p>Copyright &copy; 2006-2025 Robin Stuart and others.<br>"
+            "<p>Copyright &copy; 2006-2026 Robin Stuart and others.<br>"
             "Qt backend by BogDan Vatra.<br>"
             "Released under GNU GPL 3.0 or later.</p>"
             "<p>Qt version %2. Qt settings:<br>%3</p>"
@@ -1221,7 +1231,7 @@ void MainWindow::codeone_ui_set()
     if (symbology != BARCODE_CODEONE)
         return;
 
-    QGroupBox *groupBox = m_optionWidget->findChild<QGroupBox*>(QSL("groupBoxC1StructApp"));
+    QGroupBox *groupBox = get_groupBox(QSL("groupBoxC1StructApp"));
     if (groupBox) {
         bool enabled = get_cmb_index(QSL("cmbC1Size")) != 9; // Not Version S
         groupBox->setEnabled(enabled);
@@ -1237,8 +1247,8 @@ void MainWindow::upcean_no_quiet_zones_ui_set()
 
     bool showHRT = chkHRTShow->isEnabled() && chkHRTShow->isChecked();
     QCheckBox *noQZs, *guardWS;
-    noQZs = m_optionWidget ? m_optionWidget->findChild<QCheckBox*>(QSL("chkUPCEANNoQuietZones")) : nullptr;
-    guardWS = m_optionWidget ? m_optionWidget->findChild<QCheckBox*>(QSL("chkUPCEANGuardWhitespace")) : nullptr;
+    noQZs = get_chk(QSL("chkUPCEANNoQuietZones"));
+    guardWS = get_chk(QSL("chkUPCEANGuardWhitespace"));
 
     if (noQZs && guardWS) {
         guardWS->setEnabled(!noQZs->isChecked() && showHRT);
@@ -1256,11 +1266,11 @@ void MainWindow::upcae_no_quiet_zones_ui_set()
     bool showHRT = chkHRTShow->isEnabled() && chkHRTShow->isChecked();
     QCheckBox *noQZs, *guardWS;
     if (is_upca) {
-        noQZs = m_optionWidget ? m_optionWidget->findChild<QCheckBox*>(QSL("chkUPCANoQuietZones")) : nullptr;
-        guardWS = m_optionWidget ? m_optionWidget->findChild<QCheckBox*>(QSL("chkUPCAGuardWhitespace")) : nullptr;
+        noQZs = get_chk(QSL("chkUPCANoQuietZones"));
+        guardWS = get_chk(QSL("chkUPCAGuardWhitespace"));
     } else {
-        noQZs = m_optionWidget ? m_optionWidget->findChild<QCheckBox*>(QSL("chkUPCEANNoQuietZones")) : nullptr;
-        guardWS = m_optionWidget ? m_optionWidget->findChild<QCheckBox*>(QSL("chkUPCEANGuardWhitespace")) : nullptr;
+        noQZs = get_chk(QSL("chkUPCEANNoQuietZones"));
+        guardWS = get_chk(QSL("chkUPCEANGuardWhitespace"));
     }
 
     if (noQZs && guardWS) {
@@ -1282,12 +1292,40 @@ void MainWindow::eanaddon_no_quiet_zones_ui_set()
 
     bool showHRT = chkHRTShow->isEnabled() && chkHRTShow->isChecked();
     QCheckBox *noQZs, *guardWS;
-    noQZs = m_optionWidget ? m_optionWidget->findChild<QCheckBox*>(QSL("chkEANAddOnNoQuietZones")) : nullptr;
-    guardWS = m_optionWidget ? m_optionWidget->findChild<QCheckBox*>(QSL("chkEANAddOnGuardWhitespace")) : nullptr;
+    noQZs = get_chk(QSL("chkEANAddOnNoQuietZones"));
+    guardWS = get_chk(QSL("chkEANAddOnGuardWhitespace"));
 
     if (noQZs && guardWS) {
         guardWS->setEnabled(!noQZs->isChecked() && showHRT);
     }
+}
+
+void MainWindow::aztec_size_index_changed()
+{
+    if (get_rad_val(QSL("radAztecSize"))) {
+        m_aztecSizeIndex = get_cmb_index(QSL("cmbAztecSize"));
+    }
+    update_preview();
+}
+
+void MainWindow::aztec_ecc_index_changed()
+{
+    if (get_rad_val(QSL("radAztecECC"))) {
+        m_aztecECCIndex = get_cmb_index(QSL("cmbAztecECC"));
+    }
+    update_preview();
+}
+
+void MainWindow::dm_startmode_ui_set()
+{
+    const int idx = get_cmb_index(QSL("cmbDMStartMode"));
+    QLabel *lbl = get_lbl(QSL("lblDMStartModeLength"));
+    QSpinBox *spn = get_spn(QSL("spnDMStartModeLength"));
+    if (lbl && spn) {
+        lbl->setEnabled(idx != 0);
+        spn->setEnabled(idx != 0);
+    }
+    update_preview();
 }
 
 void MainWindow::structapp_ui_set()
@@ -1304,7 +1342,7 @@ void MainWindow::structapp_ui_set()
         widgetID = get_widget(QSL("txt") + name + QSL("StructAppID"));
     } else if (symbology == BARCODE_CODEONE) {
         name = QSL("C1");
-        QSpinBox *spnCount = m_optionWidget->findChild<QSpinBox*>(QSL("spn") + name + QSL("StructAppCount"));
+        QSpinBox *spnCount = get_spn(QSL("spn") + name + QSL("StructAppCount"));
         enabled = spnCount ? spnCount->value() > 1 : false;
         widgetCount = spnCount;
         widgetIndex = get_widget(QSL("spn") + name + QSL("StructAppIndex"));
@@ -1318,7 +1356,7 @@ void MainWindow::structapp_ui_set()
         name = QSL("Maxi");
     } else if (symbology == BARCODE_PDF417 || symbology == BARCODE_MICROPDF417) {
         name = symbology == BARCODE_PDF417 ? QSL("PDF") : QSL("MPDF");
-        QSpinBox *spnCount = m_optionWidget->findChild<QSpinBox*>(QSL("spn") + name + QSL("StructAppCount"));
+        QSpinBox *spnCount = get_spn(QSL("spn") + name + QSL("StructAppCount"));
         enabled = spnCount ? spnCount->value() > 1 : false;
         widgetCount = spnCount;
         widgetIndex = get_widget(QSL("spn") + name + QSL("StructAppIndex"));
@@ -1334,9 +1372,9 @@ void MainWindow::structapp_ui_set()
         widgetID = get_widget(QSL("spn") + name + QSL("StructAppID"));
     }
     if (!name.isEmpty()) {
-        QLabel *lblIndex = m_optionWidget->findChild<QLabel*>(QSL("lbl") + name + QSL("StructAppIndex"));
+        QLabel *lblIndex = get_lbl(QSL("lbl") + name + QSL("StructAppIndex"));
         if (!widgetCount) {
-            QComboBox *cmbCount = m_optionWidget->findChild<QComboBox*>(QSL("cmb") + name + QSL("StructAppCount"));
+            QComboBox *cmbCount = get_cmb(QSL("cmb") + name + QSL("StructAppCount"));
             enabled = cmbCount ? cmbCount->currentIndex() != 0 : false;
             widgetCount = cmbCount;
         }
@@ -1346,7 +1384,7 @@ void MainWindow::structapp_ui_set()
         if (lblIndex && widgetCount && widgetIndex) {
             lblIndex->setEnabled(enabled);
             widgetIndex->setEnabled(enabled);
-            QLabel *lblID = m_optionWidget->findChild<QLabel*>(QSL("lbl") + name + QSL("StructAppID"));
+            QLabel *lblID = get_lbl(QSL("lbl") + name + QSL("StructAppID"));
             if (lblID) {
                 lblID->setEnabled(enabled);
                 if (lblID2) {
@@ -1418,14 +1456,14 @@ void MainWindow::filter_symbologies()
     /* QString::split() only introduced Qt 5.14, so too new for us to use */
     QStringList filter_list;
     if (!filter.isEmpty()) {
-        int i, j;
+        QZINT_SIZETYPE i, j;
         for (i = 0; (j = filter.indexOf(' ', i)) != -1; i = j + 1) {
             filter_list << filter.mid(i, j - i);
         }
         filter_list << filter.mid(i);
     }
-    int filter_cnt = filter_list.size();
-    int cnt = (int) (sizeof(bstyle_items) / sizeof(bstyle_items[0]));
+    int filter_cnt = (int) filter_list.size();
+    int cnt = ARRAY_SIZE(bstyle_items);
 
     if (filter_cnt) {
         for (int i = 0; i < cnt; i++) {
@@ -1518,8 +1556,10 @@ void MainWindow::copy_to_clipboard_emf()
 
 void MainWindow::copy_to_clipboard_eps()
 {
+#ifdef MAINWINDOW_COPY_EPS
     // TODO: try other possibles application/eps, application/x-eps, image/eps, image/x-eps
     copy_to_clipboard(QSL(".zint.eps"), QSL("EPS"), "application/postscript");
+#endif
 }
 
 void MainWindow::copy_to_clipboard_gif()
@@ -1529,8 +1569,10 @@ void MainWindow::copy_to_clipboard_gif()
 
 void MainWindow::copy_to_clipboard_pcx()
 {
+#ifdef MAINWINDOW_COPY_PCX
     // TODO: try other mime types in various apps
     copy_to_clipboard(QSL(".zint.pcx"), QSL("PCX"), "image/x-pcx");
+#endif
 }
 
 void MainWindow::copy_to_clipboard_png()
@@ -1747,12 +1789,12 @@ void MainWindow::change_options()
         connect(get_widget(QSL("cmbPDFECC")), SIGNAL(currentIndexChanged(int)), SLOT(update_preview()));
         connect(get_widget(QSL("cmbPDFCols")), SIGNAL(currentIndexChanged(int)), SLOT(update_preview()));
         connect(get_widget(QSL("cmbPDFRows")), SIGNAL(currentIndexChanged(int)), SLOT(update_preview()));
-        m_lblHeightPerRow = m_optionWidget->findChild<QLabel*>(QSL("lblPDFHeightPerRow"));
-        m_spnHeightPerRow = m_optionWidget->findChild<QDoubleSpinBox*>(QSL("spnPDFHeightPerRow"));
+        m_lblHeightPerRow = get_lbl(QSL("lblPDFHeightPerRow"));
+        m_spnHeightPerRow = get_dspn(QSL("spnPDFHeightPerRow"));
         connect(m_spnHeightPerRow, SIGNAL(valueChanged(double)), SLOT(autoheight_ui_set()));
         connect(m_spnHeightPerRow, SIGNAL(valueChanged(double)), SLOT(update_preview()));
-        m_btnHeightPerRowDisable = m_optionWidget->findChild<QPushButton*>(QSL("btnPDFHeightPerRowDisable"));
-        m_btnHeightPerRowDefault = m_optionWidget->findChild<QPushButton*>(QSL("btnPDFHeightPerRowDefault"));
+        m_btnHeightPerRowDisable = get_btn(QSL("btnPDFHeightPerRowDisable"));
+        m_btnHeightPerRowDefault = get_btn(QSL("btnPDFHeightPerRowDefault"));
         connect(m_btnHeightPerRowDisable, SIGNAL(clicked(bool)), SLOT(height_per_row_disable()));
         connect(m_btnHeightPerRowDefault, SIGNAL(clicked(bool)), SLOT(height_per_row_default()));
         connect(get_widget(QSL("radPDFTruncated")), SIGNAL(toggled(bool)), SLOT(update_preview()));
@@ -1774,12 +1816,12 @@ void MainWindow::change_options()
         structapp_ui_set();
         tabMain->insertTab(1, m_optionWidget, tr("Micro PDF41&7"));
         connect(get_widget(QSL("cmbMPDFCols")), SIGNAL(currentIndexChanged(int)), SLOT(update_preview()));
-        m_lblHeightPerRow = m_optionWidget->findChild<QLabel*>(QSL("lblMPDFHeightPerRow"));
-        m_spnHeightPerRow = m_optionWidget->findChild<QDoubleSpinBox*>(QSL("spnMPDFHeightPerRow"));
+        m_lblHeightPerRow = get_lbl(QSL("lblMPDFHeightPerRow"));
+        m_spnHeightPerRow = get_dspn(QSL("spnMPDFHeightPerRow"));
         connect(m_spnHeightPerRow, SIGNAL(valueChanged(double)), SLOT(autoheight_ui_set()));
         connect(m_spnHeightPerRow, SIGNAL(valueChanged(double)), SLOT(update_preview()));
-        m_btnHeightPerRowDisable = m_optionWidget->findChild<QPushButton*>(QSL("btnMPDFHeightPerRowDisable"));
-        m_btnHeightPerRowDefault = m_optionWidget->findChild<QPushButton*>(QSL("btnMPDFHeightPerRowDefault"));
+        m_btnHeightPerRowDisable = get_btn(QSL("btnMPDFHeightPerRowDisable"));
+        m_btnHeightPerRowDefault = get_btn(QSL("btnMPDFHeightPerRowDefault"));
         connect(m_btnHeightPerRowDisable, SIGNAL(clicked(bool)), SLOT(height_per_row_disable()));
         connect(m_btnHeightPerRowDefault, SIGNAL(clicked(bool)), SLOT(height_per_row_default()));
         connect(get_widget(QSL("radMPDFStand")), SIGNAL(toggled(bool)), SLOT(update_preview()));
@@ -1818,11 +1860,14 @@ void MainWindow::change_options()
         connect(get_widget(QSL("radAztecAuto")), SIGNAL(toggled(bool)), SLOT(update_preview()));
         connect(get_widget(QSL("radAztecSize")), SIGNAL(toggled(bool)), SLOT(update_preview()));
         connect(get_widget(QSL("radAztecECC")), SIGNAL(toggled(bool)), SLOT(update_preview()));
-        connect(get_widget(QSL("cmbAztecSize")), SIGNAL(currentIndexChanged(int)), SLOT(update_preview()));
-        connect(get_widget(QSL("cmbAztecECC")), SIGNAL(currentIndexChanged(int)), SLOT(update_preview()));
+        connect(get_widget(QSL("cmbAztecSize")), SIGNAL(currentIndexChanged(int)), SLOT(aztec_size_index_changed()));
+        connect(get_widget(QSL("cmbAztecECC")), SIGNAL(currentIndexChanged(int)), SLOT(aztec_ecc_index_changed()));
         connect(get_widget(QSL("radAztecStand")), SIGNAL(toggled(bool)), SLOT(update_preview()));
         connect(get_widget(QSL("radAztecGS1")), SIGNAL(toggled(bool)), SLOT(update_preview()));
         connect(get_widget(QSL("radAztecHIBC")), SIGNAL(toggled(bool)), SLOT(update_preview()));
+        connect(get_widget(QSL("radAztecExtraEsc")), SIGNAL(toggled(bool)), SLOT(update_preview()));
+        connect(get_widget(QSL("chkAztecFull")), SIGNAL(toggled(bool)), SLOT(update_preview()));
+        connect(get_widget(QSL("chkAztecFast")), SIGNAL(toggled(bool)), SLOT(update_preview()));
         connect(get_widget(QSL("cmbAztecStructAppCount")), SIGNAL(currentIndexChanged(int)), SLOT(update_preview()));
         connect(get_widget(QSL("cmbAztecStructAppCount")), SIGNAL(currentIndexChanged(int)),
                 SLOT(structapp_ui_set()));
@@ -1881,11 +1926,11 @@ void MainWindow::change_options()
         connect(get_widget(QSL("radC39Stand")), SIGNAL(toggled(bool)), SLOT(update_preview()));
         connect(get_widget(QSL("radC39Check")), SIGNAL(toggled(bool)), SLOT(update_preview()));
         connect(get_widget(QSL("radC39CheckHide")), SIGNAL(toggled(bool)), SLOT(update_preview()));
-        QRadioButton *radC39HIBC = m_optionWidget->findChild<QRadioButton*>(QSL("radC39HIBC"));
+        QRadioButton *radC39HIBC = get_rad(QSL("radC39HIBC"));
         if (symbology == BARCODE_EXCODE39 || symbology == BARCODE_LOGMARS) {
             if (radC39HIBC->isChecked()) {
                 radC39HIBC->setChecked(false);
-                m_optionWidget->findChild<QRadioButton*>(QSL("radC39Stand"))->setChecked(true);
+                get_rad(QSL("radC39Stand"))->setChecked(true);
             }
             radC39HIBC->setEnabled(false);
             radC39HIBC->hide();
@@ -1905,12 +1950,12 @@ void MainWindow::change_options()
         tabMain->insertTab(1, m_optionWidget, tr("Cod&e 16K"));
         btype->setItemText(0, tr("Default (bind)"));
         connect(get_widget(QSL("cmbC16kRows")), SIGNAL(currentIndexChanged(int)), SLOT(update_preview()));
-        m_lblHeightPerRow = m_optionWidget->findChild<QLabel*>(QSL("lblC16kHeightPerRow"));
-        m_spnHeightPerRow = m_optionWidget->findChild<QDoubleSpinBox*>(QSL("spnC16kHeightPerRow"));
+        m_lblHeightPerRow = get_lbl(QSL("lblC16kHeightPerRow"));
+        m_spnHeightPerRow = get_dspn(QSL("spnC16kHeightPerRow"));
         connect(m_spnHeightPerRow, SIGNAL(valueChanged(double)), SLOT(autoheight_ui_set()));
         connect(m_spnHeightPerRow, SIGNAL(valueChanged(double)), SLOT(update_preview()));
-        m_btnHeightPerRowDisable = m_optionWidget->findChild<QPushButton*>(QSL("btnC16kHeightPerRowDisable"));
-        m_btnHeightPerRowDefault = m_optionWidget->findChild<QPushButton*>(QSL("btnC16kHeightPerRowDefault"));
+        m_btnHeightPerRowDisable = get_btn(QSL("btnC16kHeightPerRowDisable"));
+        m_btnHeightPerRowDefault = get_btn(QSL("btnC16kHeightPerRowDefault"));
         connect(m_btnHeightPerRowDisable, SIGNAL(clicked(bool)), SLOT(height_per_row_disable()));
         connect(m_btnHeightPerRowDefault, SIGNAL(clicked(bool)), SLOT(height_per_row_default()));
         connect(get_widget(QSL("cmbC16kRowSepHeight")), SIGNAL(currentIndexChanged(int)), SLOT(update_preview()));
@@ -1937,16 +1982,16 @@ void MainWindow::change_options()
         m_optionWidget = uiload.load(&file);
         file.close();
         load_sub_settings(settings, symbology);
-        tabMain->insertTab(1, m_optionWidget, tr("Codablock&-F"));
+        tabMain->insertTab(1, m_optionWidget, tr("Cod&ablock F"));
         btype->setItemText(0, tr("Default (bind)"));
         connect(get_widget(QSL("cmbCbfWidth")), SIGNAL(currentIndexChanged(int)), SLOT(update_preview()));
         connect(get_widget(QSL("cmbCbfHeight")), SIGNAL(currentIndexChanged(int)), SLOT(update_preview()));
-        m_lblHeightPerRow = m_optionWidget->findChild<QLabel*>(QSL("lblCbfHeightPerRow"));
-        m_spnHeightPerRow = m_optionWidget->findChild<QDoubleSpinBox*>(QSL("spnCbfHeightPerRow"));
+        m_lblHeightPerRow = get_lbl(QSL("lblCbfHeightPerRow"));
+        m_spnHeightPerRow = get_dspn(QSL("spnCbfHeightPerRow"));
         connect(m_spnHeightPerRow, SIGNAL(valueChanged(double)), SLOT(autoheight_ui_set()));
         connect(m_spnHeightPerRow, SIGNAL(valueChanged(double)), SLOT(update_preview()));
-        m_btnHeightPerRowDisable = m_optionWidget->findChild<QPushButton*>(QSL("btnCbfHeightPerRowDisable"));
-        m_btnHeightPerRowDefault = m_optionWidget->findChild<QPushButton*>(QSL("btnCbfHeightPerRowDefault"));
+        m_btnHeightPerRowDisable = get_btn(QSL("btnCbfHeightPerRowDisable"));
+        m_btnHeightPerRowDefault = get_btn(QSL("btnCbfHeightPerRowDefault"));
         connect(m_btnHeightPerRowDisable, SIGNAL(clicked(bool)), SLOT(height_per_row_disable()));
         connect(m_btnHeightPerRowDefault, SIGNAL(clicked(bool)), SLOT(height_per_row_default()));
         connect(get_widget(QSL("cmbCbfRowSepHeight")), SIGNAL(currentIndexChanged(int)), SLOT(update_preview()));
@@ -1983,27 +2028,32 @@ void MainWindow::change_options()
 
     } else if (symbology == BARCODE_DATAMATRIX) {
         QFile file(QSL(":/grpDM.ui"));
-        if (!file.open(QIODevice::ReadOnly))
-            return;
-        m_optionWidget = uiload.load(&file);
-        file.close();
-        load_sub_settings(settings, symbology);
-        structapp_ui_set();
-        tabMain->insertTab(1, m_optionWidget, tr("D&ata Matrix"));
-        connect(get_widget(QSL("radDM200Stand")), SIGNAL(toggled(bool)), SLOT(update_preview()));
-        connect(get_widget(QSL("radDM200GS1")), SIGNAL(toggled(bool)), SLOT(update_preview()));
-        connect(get_widget(QSL("radDM200HIBC")), SIGNAL(toggled(bool)), SLOT(update_preview()));
-        connect(get_widget(QSL("cmbDM200Size")), SIGNAL(currentIndexChanged(int)), SLOT(update_preview()));
-        connect(get_widget(QSL("chkDMRectangle")), SIGNAL(toggled(bool)), SLOT(update_preview()));
-        connect(get_widget(QSL("chkDMRE")), SIGNAL(toggled(bool)), SLOT(update_preview()));
-        connect(get_widget(QSL("chkDMGSSep")), SIGNAL(toggled(bool)), SLOT(update_preview()));
-        connect(get_widget(QSL("chkDMISO144")), SIGNAL(toggled(bool)), SLOT(update_preview()));
-        connect(get_widget(QSL("chkDMFast")), SIGNAL(toggled(bool)), SLOT(update_preview()));
-        connect(get_widget(QSL("cmbDMStructAppCount")), SIGNAL(currentIndexChanged(int)), SLOT(update_preview()));
-        connect(get_widget(QSL("cmbDMStructAppCount")), SIGNAL(currentIndexChanged(int)), SLOT(structapp_ui_set()));
-        connect(get_widget(QSL("cmbDMStructAppIndex")), SIGNAL(currentIndexChanged(int)), SLOT(update_preview()));
-        connect(get_widget(QSL("spnDMStructAppID")), SIGNAL(valueChanged(int)), SLOT(update_preview()));
-        connect(get_widget(QSL("spnDMStructAppID2")), SIGNAL(valueChanged(int)), SLOT(update_preview()));
+        if (file.open(QIODevice::ReadOnly)) {
+            m_optionWidget = uiload.load(&file);
+            file.close();
+            load_sub_settings(settings, symbology);
+            structapp_ui_set();
+            dm_startmode_ui_set();
+            tabMain->insertTab(1, m_optionWidget, tr("D&ata Matrix"));
+            connect(get_widget(QSL("radDMStand")), SIGNAL(toggled(bool)), SLOT(update_preview()));
+            connect(get_widget(QSL("radDMGS1")), SIGNAL(toggled(bool)), SLOT(update_preview()));
+            connect(get_widget(QSL("radDMHIBC")), SIGNAL(toggled(bool)), SLOT(update_preview()));
+            connect(get_widget(QSL("radDMExtraEsc")), SIGNAL(toggled(bool)), SLOT(update_preview()));
+            connect(get_widget(QSL("cmbDMSize")), SIGNAL(currentIndexChanged(int)), SLOT(update_preview()));
+            connect(get_widget(QSL("chkDMRectangle")), SIGNAL(toggled(bool)), SLOT(update_preview()));
+            connect(get_widget(QSL("chkDMRE")), SIGNAL(toggled(bool)), SLOT(update_preview()));
+            connect(get_widget(QSL("chkDMGSSep")), SIGNAL(toggled(bool)), SLOT(update_preview()));
+            connect(get_widget(QSL("cmbDMStartMode")), SIGNAL(currentIndexChanged(int)), SLOT(dm_startmode_ui_set()));
+            connect(get_widget(QSL("spnDMStartModeLength")), SIGNAL(valueChanged(int)), SLOT(dm_startmode_ui_set()));
+            connect(get_widget(QSL("chkDMISO144")), SIGNAL(toggled(bool)), SLOT(update_preview()));
+            connect(get_widget(QSL("chkDMFast")), SIGNAL(toggled(bool)), SLOT(update_preview()));
+            connect(get_widget(QSL("cmbDMStructAppCount")), SIGNAL(currentIndexChanged(int)), SLOT(update_preview()));
+            connect(get_widget(QSL("cmbDMStructAppCount")), SIGNAL(currentIndexChanged(int)),
+                    SLOT(structapp_ui_set()));
+            connect(get_widget(QSL("cmbDMStructAppIndex")), SIGNAL(currentIndexChanged(int)), SLOT(update_preview()));
+            connect(get_widget(QSL("spnDMStructAppID")), SIGNAL(valueChanged(int)), SLOT(update_preview()));
+            connect(get_widget(QSL("spnDMStructAppID2")), SIGNAL(valueChanged(int)), SLOT(update_preview()));
+        }
 
     } else if (symbology == BARCODE_MAILMARK_2D) {
         QFile file(QSL(":/grpMailmark2D.ui"));
@@ -2192,12 +2242,12 @@ void MainWindow::change_options()
         tabMain->insertTab(1, m_optionWidget, tr("Cod&e 49"));
         btype->setItemText(0, tr("Default (bind)"));
         connect(get_widget(QSL("cmbC49Rows")), SIGNAL(currentIndexChanged(int)), SLOT(update_preview()));
-        m_lblHeightPerRow = m_optionWidget->findChild<QLabel*>(QSL("lblC49HeightPerRow"));
-        m_spnHeightPerRow = m_optionWidget->findChild<QDoubleSpinBox*>(QSL("spnC49HeightPerRow"));
+        m_lblHeightPerRow = get_lbl(QSL("lblC49HeightPerRow"));
+        m_spnHeightPerRow = get_dspn(QSL("spnC49HeightPerRow"));
         connect(m_spnHeightPerRow, SIGNAL(valueChanged(double)), SLOT(autoheight_ui_set()));
         connect(m_spnHeightPerRow, SIGNAL(valueChanged(double)), SLOT(update_preview()));
-        m_btnHeightPerRowDisable = m_optionWidget->findChild<QPushButton*>(QSL("btnC49HeightPerRowDisable"));
-        m_btnHeightPerRowDefault = m_optionWidget->findChild<QPushButton*>(QSL("btnC49HeightPerRowDefault"));
+        m_btnHeightPerRowDisable = get_btn(QSL("btnC49HeightPerRowDisable"));
+        m_btnHeightPerRowDefault = get_btn(QSL("btnC49HeightPerRowDefault"));
         connect(m_btnHeightPerRowDisable, SIGNAL(clicked(bool)), SLOT(height_per_row_disable()));
         connect(m_btnHeightPerRowDefault, SIGNAL(clicked(bool)), SLOT(height_per_row_default()));
         connect(get_widget(QSL("cmbC49RowSepHeight")), SIGNAL(currentIndexChanged(int)), SLOT(update_preview()));
@@ -2227,12 +2277,12 @@ void MainWindow::change_options()
         connect(get_widget(QSL("radDBESRows")), SIGNAL(toggled(bool)), SLOT(update_preview()));
         connect(get_widget(QSL("cmbDBESCols")), SIGNAL(currentIndexChanged(int)), SLOT(update_preview()));
         connect(get_widget(QSL("cmbDBESRows")), SIGNAL(currentIndexChanged(int)), SLOT(update_preview()));
-        m_lblHeightPerRow = m_optionWidget->findChild<QLabel*>(QSL("lblDBESHeightPerRow"));
-        m_spnHeightPerRow = m_optionWidget->findChild<QDoubleSpinBox*>(QSL("spnDBESHeightPerRow"));
+        m_lblHeightPerRow = get_lbl(QSL("lblDBESHeightPerRow"));
+        m_spnHeightPerRow = get_dspn(QSL("spnDBESHeightPerRow"));
         connect(m_spnHeightPerRow, SIGNAL(valueChanged(double)), SLOT(autoheight_ui_set()));
         connect(m_spnHeightPerRow, SIGNAL(valueChanged(double)), SLOT(update_preview()));
-        m_btnHeightPerRowDisable = m_optionWidget->findChild<QPushButton*>(QSL("btnDBESHeightPerRowDisable"));
-        m_btnHeightPerRowDefault = m_optionWidget->findChild<QPushButton*>(QSL("btnDBESHeightPerRowDefault"));
+        m_btnHeightPerRowDisable = get_btn(QSL("btnDBESHeightPerRowDisable"));
+        m_btnHeightPerRowDefault = get_btn(QSL("btnDBESHeightPerRowDefault"));
         connect(m_btnHeightPerRowDisable, SIGNAL(clicked(bool)), SLOT(height_per_row_disable()));
         connect(m_btnHeightPerRowDefault, SIGNAL(clicked(bool)), SLOT(height_per_row_default()));
 
@@ -2245,6 +2295,30 @@ void MainWindow::change_options()
             vLayoutSpecific->addWidget(m_optionWidget);
             grpSpecific->show();
             connect(get_widget(QSL("chkPlesseyShowChecks")), SIGNAL(toggled(bool)), SLOT(update_preview()));
+        }
+
+    } else if (symbology == BARCODE_TELEPEN) {
+        QFile file(QSL(":/grpTelepen.ui"));
+        if (file.open(QIODevice::ReadOnly)) {
+            m_optionWidget = uiload.load(&file);
+            file.close();
+            load_sub_settings(settings, symbology);
+            vLayoutSpecific->addWidget(m_optionWidget);
+            set_smaller_font(QSL("noteTelepenDLE"));
+            grpSpecific->show();
+            connect(get_widget(QSL("chkTelepenAIM")), SIGNAL(toggled(bool)), SLOT(update_preview()));
+        }
+
+    } else if (symbology == BARCODE_TELEPEN_NUM) {
+        QFile file(QSL(":/grpTelepenNum.ui"));
+        if (file.open(QIODevice::ReadOnly)) {
+            m_optionWidget = uiload.load(&file);
+            file.close();
+            load_sub_settings(settings, symbology);
+            vLayoutSpecific->addWidget(m_optionWidget);
+            set_smaller_font(QSL("noteTelepenNumDLE"));
+            grpSpecific->show();
+            connect(get_widget(QSL("chkTelepenNumAIM")), SIGNAL(toggled(bool)), SLOT(update_preview()));
         }
 
     } else if (symbology == BARCODE_ULTRA) {
@@ -2396,7 +2470,7 @@ void MainWindow::change_options()
             break;
     }
 
-    // ECI, GS1Parens, GS1NoCheck, RInit, CompliantHeight will be checked in update_preview() as
+    // ECI, GS1Parens, GS1Raw, GS1NoCheck, GS1Strict, RInit, CompliantHeight will be checked in update_preview() as
     // encoding mode dependent (HIBC and/or GS1)
     chkAutoHeight->setEnabled(!m_bc.bc.isFixedRatio(symbology));
     chkHRTShow->setEnabled(m_bc.bc.hasHRT(symbology));
@@ -2510,7 +2584,7 @@ void MainWindow::composite_ui_set()
 
     if (enabled) {
         if (bstyle_items[bstyle->currentIndex()].symbology == BARCODE_CODE128) {
-            QRadioButton *radioButton = m_optionWidget->findChild<QRadioButton*>(QSL("radC128EAN"));
+            QRadioButton *radioButton = get_rad(QSL("radC128EAN"));
             if (radioButton) {
                 radioButton->setChecked(true);
             }
@@ -2522,7 +2596,7 @@ void MainWindow::composite_ean_check()
 {
     if (bstyle_items[bstyle->currentIndex()].symbology != BARCODE_CODE128)
         return;
-    QRadioButton *radioButton = m_optionWidget->findChild<QRadioButton*>(QSL("radC128EAN"));
+    QRadioButton *radioButton = get_rad(QSL("radC128EAN"));
     if (radioButton && !radioButton->isChecked())
         chkComposite->setChecked(false);
 }
@@ -2531,28 +2605,28 @@ void MainWindow::maxi_scm_ui_set()
 {
     if (bstyle_items[bstyle->currentIndex()].symbology != BARCODE_MAXICODE)
         return;
-    QCheckBox *chkMaxiSCMVV = m_optionWidget ? m_optionWidget->findChild<QCheckBox*>(QSL("chkMaxiSCMVV")) : nullptr;
+    QCheckBox *chkMaxiSCMVV = get_chk(QSL("chkMaxiSCMVV"));
     if (!chkMaxiSCMVV)
         return;
 
     bool isMode2or3 = get_cmb_index(QSL("cmbMaxiMode")) == 0;
 
-    m_optionWidget->findChild<QLabel*>(QSL("lblMaxiSCMPostcode"))->setEnabled(isMode2or3);
-    m_optionWidget->findChild<QLineEdit*>(QSL("txtMaxiSCMPostcode"))->setEnabled(isMode2or3);
-    m_optionWidget->findChild<QLabel*>(QSL("lblMaxiSCMCountry"))->setEnabled(isMode2or3);
-    m_optionWidget->findChild<QSpinBox*>(QSL("spnMaxiSCMCountry"))->setEnabled(isMode2or3);
-    m_optionWidget->findChild<QLabel*>(QSL("lblMaxiSCMService"))->setEnabled(isMode2or3);
-    m_optionWidget->findChild<QSpinBox*>(QSL("spnMaxiSCMService"))->setEnabled(isMode2or3);
+    get_lbl(QSL("lblMaxiSCMPostcode"))->setEnabled(isMode2or3);
+    get_txt(QSL("txtMaxiSCMPostcode"))->setEnabled(isMode2or3);
+    get_lbl(QSL("lblMaxiSCMCountry"))->setEnabled(isMode2or3);
+    get_spn(QSL("spnMaxiSCMCountry"))->setEnabled(isMode2or3);
+    get_lbl(QSL("lblMaxiSCMService"))->setEnabled(isMode2or3);
+    get_spn(QSL("spnMaxiSCMService"))->setEnabled(isMode2or3);
     chkMaxiSCMVV->setEnabled(isMode2or3);
-    m_optionWidget->findChild<QLabel*>(QSL("lblMaxiSCMVV"))->setEnabled(isMode2or3 && chkMaxiSCMVV->isChecked());
-    m_optionWidget->findChild<QSpinBox*>(QSL("spnMaxiSCMVV"))->setEnabled(isMode2or3 && chkMaxiSCMVV->isChecked());
+    get_lbl(QSL("lblMaxiSCMVV"))->setEnabled(isMode2or3 && chkMaxiSCMVV->isChecked());
+    get_spn(QSL("spnMaxiSCMVV"))->setEnabled(isMode2or3 && chkMaxiSCMVV->isChecked());
 }
 
 void MainWindow::msi_plessey_ui_set()
 {
     if (bstyle_items[bstyle->currentIndex()].symbology != BARCODE_MSI_PLESSEY)
         return;
-    QCheckBox *checkBox = m_optionWidget ? m_optionWidget->findChild<QCheckBox*>(QSL("chkMSICheckText")) : nullptr;
+    QCheckBox *checkBox = get_chk(QSL("chkMSICheckText"));
     if (checkBox) {
         checkBox->setEnabled(get_cmb_index(QSL("cmbMSICheck")) > 0);
     }
@@ -2572,8 +2646,8 @@ void MainWindow::combobox_item_enabled(QComboBox *comboBox, int index, bool enab
 
 bool MainWindow::upcean_addon_gap(const QString &comboBoxName, const QString &labelName, int base)
 {
-    QComboBox *comboBox = m_optionWidget->findChild<QComboBox*>(comboBoxName);
-    QLabel *label = m_optionWidget->findChild<QLabel*>(labelName);
+    QComboBox *comboBox = get_cmb(comboBoxName);
+    QLabel *label = get_lbl(labelName);
 
     bool enabled = have_addon();
     if (comboBox) {
@@ -2594,9 +2668,9 @@ bool MainWindow::upcean_addon_gap(const QString &comboBoxName, const QString &la
 void MainWindow::upcean_guard_descent(const QString &spnBoxName, const QString &labelName,
         const QString &btnDefaultName, bool enabled)
 {
-    QDoubleSpinBox *spnBox = m_optionWidget->findChild<QDoubleSpinBox*>(spnBoxName);
-    QLabel *label = m_optionWidget->findChild<QLabel*>(labelName);
-    QPushButton *btnDefault = m_optionWidget->findChild<QPushButton*>(btnDefaultName);
+    QDoubleSpinBox *spnBox = get_dspn(spnBoxName);
+    QLabel *label = get_lbl(labelName);
+    QPushButton *btnDefault = get_btn(btnDefaultName);
 
     if (spnBox) {
         spnBox->setEnabled(enabled);
@@ -2621,7 +2695,7 @@ void MainWindow::upcean_guard_descent(const QString &spnBoxName, const QString &
 
 void MainWindow::guard_default(const QString &spnBoxName)
 {
-    QDoubleSpinBox *spnBox = m_optionWidget->findChild<QDoubleSpinBox*>(spnBoxName);
+    QDoubleSpinBox *spnBox = get_dspn(spnBoxName);
     if (spnBox && spnBox->value() != 5.0) {
         spnBox->setValue(5.0);
         update_preview();
@@ -2630,8 +2704,8 @@ void MainWindow::guard_default(const QString &spnBoxName)
 
 void MainWindow::daft_ui_set()
 {
-    QDoubleSpinBox *spnBox = m_optionWidget->findChild<QDoubleSpinBox*>(QSL("spnDAFTTrackerRatio"));
-    QPushButton *btnDefault = m_optionWidget->findChild<QPushButton*>(QSL("btnDAFTTrackerDefault"));
+    QDoubleSpinBox *spnBox = get_dspn(QSL("spnDAFTTrackerRatio"));
+    QPushButton *btnDefault = get_btn(QSL("btnDAFTTrackerDefault"));
     if (spnBox && spnBox->value() == 25.0) {
         if (btnDefault) {
             QWidget *focus = QApplication::focusWidget();
@@ -2647,7 +2721,7 @@ void MainWindow::daft_ui_set()
 
 void MainWindow::daft_tracker_default()
 {
-    QDoubleSpinBox *spnBox = m_optionWidget->findChild<QDoubleSpinBox*>(QSL("spnDAFTTrackerRatio"));
+    QDoubleSpinBox *spnBox = get_dspn(QSL("spnDAFTTrackerRatio"));
     if (spnBox && spnBox->value() != 25.0) {
         spnBox->setValue(25.0);
         update_preview();
@@ -2666,7 +2740,7 @@ void MainWindow::set_gs1_mode(bool gs1_mode)
 
 void MainWindow::set_smaller_font(const QString &labelName)
 {
-    QLabel *label = m_optionWidget ? m_optionWidget->findChild<QLabel*>(labelName) : nullptr;
+    QLabel *label = get_lbl(labelName);
     if (label) {
         const QFont &appFont = QApplication::font();
         qreal pointSize = appFont.pointSizeF();
@@ -2912,18 +2986,34 @@ void MainWindow::update_preview()
             break;
 
         case BARCODE_AZTEC:
-            if (get_rad_val(QSL("radAztecHIBC")))
+            if (get_rad_val(QSL("radAztecHIBC"))) {
                 m_bc.bc.setSymbol(BARCODE_HIBC_AZTEC);
-            else
+            } else {
                 m_bc.bc.setSymbol(BARCODE_AZTEC);
+                if (get_rad_val(QSL("radAztecExtraEsc"))) {
+                    m_bc.bc.setInputMode(m_bc.bc.inputMode() | EXTRA_ESCAPE_MODE);
+                }
+            }
 
-            if (get_rad_val(QSL("radAztecSize")))
+            if (get_rad_val(QSL("radAztecSize"))) {
                 m_bc.bc.setOption2(get_cmb_index(QSL("cmbAztecSize")) + 1);
+                get_chk(QSL("chkAztecFull"))->setEnabled(false);
+                m_bc.bc.setOption3(0);
+            } else {
+                get_chk(QSL("chkAztecFull"))->setEnabled(true);
+                if (get_chk(QSL("chkAztecFull"))->isChecked()) {
+                    m_bc.bc.setOption3(ZINT_AZTEC_FULL);
+                }
+            }
 
             if (get_rad_val(QSL("radAztecECC")))
                 m_bc.bc.setOption1(get_cmb_index(QSL("cmbAztecECC")) + 1);
 
             set_gs1_mode(get_rad_val(QSL("radAztecGS1")));
+
+            if (get_chk_val(QSL("chkAztecFast"))) {
+                m_bc.bc.setInputMode(FAST_MODE | m_bc.bc.inputMode());
+            }
 
             if ((item_val = get_cmb_index(QSL("cmbAztecStructAppCount"))) != 0) {
                 m_bc.bc.setStructApp(item_val + 1, get_cmb_index(QSL("cmbAztecStructAppIndex")) + 1,
@@ -3045,13 +3135,13 @@ void MainWindow::update_preview()
             break;
 
         case BARCODE_DATAMATRIX:
-            if (get_rad_val(QSL("radDM200HIBC")))
+            if (get_rad_val(QSL("radDMHIBC")))
                 m_bc.bc.setSymbol(BARCODE_HIBC_DM);
             else
                 m_bc.bc.setSymbol(BARCODE_DATAMATRIX);
 
-            checkBox = m_optionWidget->findChild<QCheckBox*>(QSL("chkDMGSSep"));
-            if (get_rad_val(QSL("radDM200GS1"))) {
+            checkBox = get_chk(QSL("chkDMGSSep"));
+            if (get_rad_val(QSL("radDMGS1"))) {
                 set_gs1_mode(true);
                 checkBox->setEnabled(true);
                 if (checkBox->isChecked()) {
@@ -3062,27 +3152,41 @@ void MainWindow::update_preview()
                 checkBox->setEnabled(false);
             }
 
-            m_bc.bc.setOption2(get_cmb_index(QSL("cmbDM200Size")));
+            if (get_rad_val(QSL("radDMExtraEsc"))) {
+                m_bc.bc.setSymbol(BARCODE_DATAMATRIX);
+                m_bc.bc.setInputMode(m_bc.bc.inputMode() | EXTRA_ESCAPE_MODE);
+            }
 
-            if (get_cmb_index(QSL("cmbDM200Size")) == 0) {
+            m_bc.bc.setOption2(get_cmb_index(QSL("cmbDMSize")));
+
+            if (get_cmb_index(QSL("cmbDMSize")) == 0) {
                 // Suppressing rectangles or allowing DMRE only makes sense if in automatic size mode
-                m_optionWidget->findChild<QLabel*>(QSL("lblDMAutoSize"))->setEnabled(true);
-                m_optionWidget->findChild<QCheckBox*>(QSL("chkDMRectangle"))->setEnabled(true);
-                if (m_optionWidget->findChild<QCheckBox*>(QSL("chkDMRectangle"))->isChecked()) {
+                get_lbl(QSL("lblDMAutoSize"))->setEnabled(true);
+                get_chk(QSL("chkDMRectangle"))->setEnabled(true);
+                if (get_chk(QSL("chkDMRectangle"))->isChecked()) {
                     m_bc.bc.setOption3(DM_SQUARE);
-                    m_optionWidget->findChild<QCheckBox*>(QSL("chkDMRE"))->setEnabled(false);
+                    get_chk(QSL("chkDMRE"))->setEnabled(false);
                 } else {
-                    m_optionWidget->findChild<QCheckBox*>(QSL("chkDMRE"))->setEnabled(true);
-                    if (m_optionWidget->findChild<QCheckBox*>(QSL("chkDMRE"))->isChecked())
+                    get_chk(QSL("chkDMRE"))->setEnabled(true);
+                    if (get_chk(QSL("chkDMRE"))->isChecked())
                         m_bc.bc.setOption3(DM_DMRE);
                     else
                         m_bc.bc.setOption3(0);
                 }
             } else {
-                m_optionWidget->findChild<QLabel*>(QSL("lblDMAutoSize"))->setEnabled(false);
-                m_optionWidget->findChild<QCheckBox*>(QSL("chkDMRectangle"))->setEnabled(false);
-                m_optionWidget->findChild<QCheckBox*>(QSL("chkDMRE"))->setEnabled(false);
+                get_lbl(QSL("lblDMAutoSize"))->setEnabled(false);
+                get_chk(QSL("chkDMRectangle"))->setEnabled(false);
+                get_chk(QSL("chkDMRE"))->setEnabled(false);
                 m_bc.bc.setOption3(0);
+            }
+
+            item_val = get_cmb_index(QSL("cmbDMStartMode"));
+            if (item_val) {
+                m_bc.bc.setOption1(get_spn_val(QSL("spnDMStartModeLength")));
+                m_bc.bc.setOption3(m_bc.bc.option3() | (item_val == 1 ? DM_B256_START : DM_C40_START));
+            } else {
+                m_bc.bc.setOption1(-1);
+                m_bc.bc.setOption3(m_bc.bc.option3() & ~(DM_B256_START | DM_C40_START));
             }
 
             if (get_chk_val(QSL("chkDMISO144"))) {
@@ -3111,14 +3215,14 @@ void MainWindow::update_preview()
 
             if (!item_val) {
                 // Suppressing rectangles only makes sense if in automatic size mode
-                m_optionWidget->findChild<QLabel*>(QSL("lblMailmark2DAutoSize"))->setEnabled(true);
-                m_optionWidget->findChild<QCheckBox*>(QSL("chkMailmark2DRectangle"))->setEnabled(true);
-                if (m_optionWidget->findChild<QCheckBox*>(QSL("chkMailmark2DRectangle"))->isChecked()) {
+                get_lbl(QSL("lblMailmark2DAutoSize"))->setEnabled(true);
+                get_chk(QSL("chkMailmark2DRectangle"))->setEnabled(true);
+                if (get_chk(QSL("chkMailmark2DRectangle"))->isChecked()) {
                     m_bc.bc.setOption3(DM_SQUARE);
                 }
             } else {
-                m_optionWidget->findChild<QLabel*>(QSL("lblMailmark2DAutoSize"))->setEnabled(false);
-                m_optionWidget->findChild<QCheckBox*>(QSL("chkMailmark2DRectangle"))->setEnabled(false);
+                get_lbl(QSL("lblMailmark2DAutoSize"))->setEnabled(false);
+                get_chk(QSL("chkMailmark2DRectangle"))->setEnabled(false);
                 m_bc.bc.setOption3(0);
             }
 
@@ -3237,7 +3341,7 @@ void MainWindow::update_preview()
                 m_bc.bc.setPrimaryMessage(QString::asprintf("%s%03d%03d",
                                     get_txt_val(QSL("txtMaxiSCMPostcode")).toUtf8().constData(),
                                     get_spn_val(QSL("spnMaxiSCMCountry")), get_spn_val(QSL("spnMaxiSCMService"))));
-                QCheckBox *chkMaxiSCMVV = m_optionWidget->findChild<QCheckBox*>(QSL("chkMaxiSCMVV"));
+                QCheckBox *chkMaxiSCMVV = get_chk(QSL("chkMaxiSCMVV"));
                 if (chkMaxiSCMVV && chkMaxiSCMVV->isEnabled() && chkMaxiSCMVV->isChecked()) {
                     m_bc.bc.setOption2(get_spn_val(QSL("spnMaxiSCMVV")) + 1);
                 }
@@ -3266,9 +3370,9 @@ void MainWindow::update_preview()
                 eci_not_set = false;
                 cmbECI->setEnabled(false);
                 lblECI->setEnabled(false);
-                m_optionWidget->findChild<QRadioButton*>(QSL("radC1GS1"))->setEnabled(false);
+                get_rad(QSL("radC1GS1"))->setEnabled(false);
             } else {
-                m_optionWidget->findChild<QRadioButton*>(QSL("radC1GS1"))->setEnabled(true);
+                get_rad(QSL("radC1GS1"))->setEnabled(true);
                 set_gs1_mode(get_rad_val(QSL("radC1GS1")));
             }
             if (get_cmb_index(QSL("cmbC1Size")) != 9 && (item_val = get_spn_val(QSL("spnC1StructAppCount"))) > 1) {
@@ -3322,6 +3426,20 @@ void MainWindow::update_preview()
             }
             break;
 
+        case BARCODE_TELEPEN:
+            m_bc.bc.setSymbol(BARCODE_TELEPEN);
+            if (get_chk_val(QSL("chkTelepenAIM"))) {
+                m_bc.bc.setOption2(1);
+            }
+            break;
+
+        case BARCODE_TELEPEN_NUM:
+            m_bc.bc.setSymbol(BARCODE_TELEPEN_NUM);
+            if (get_chk_val(QSL("chkTelepenNumAIM"))) {
+                m_bc.bc.setOption2(1);
+            }
+            break;
+
         case BARCODE_ULTRA:
             m_bc.bc.setSymbol(BARCODE_ULTRA);
             if (get_rad_val(QSL("radUltraEcc")))
@@ -3358,9 +3476,11 @@ void MainWindow::update_preview()
         lblECI->setEnabled(cmbECI->isEnabled());
     }
     btnClearData->setEnabled(!txtData->text().isEmpty());
-    chkGS1Parens->setEnabled(m_bc.bc.takesGS1AIData(m_symbology) || (m_bc.bc.inputMode() & 0x07) == GS1_MODE);
-    chkGS1NoCheck->setEnabled(chkGS1Parens->isEnabled());
-    chkGS1Strict->setEnabled(chkGS1Parens->isEnabled() && !chkGS1NoCheck->isChecked());
+    lblGS1Chks->setEnabled(m_bc.bc.takesGS1AIData(m_symbology) || (m_bc.bc.inputMode() & 0x07) == GS1_MODE);
+    chkGS1Parens->setEnabled(lblGS1Chks->isEnabled() && !chkGS1Raw->isChecked());
+    chkGS1Raw->setEnabled(lblGS1Chks->isEnabled() && !chkGS1Parens->isChecked());
+    chkGS1NoCheck->setEnabled(lblGS1Chks->isEnabled());
+    chkGS1Strict->setEnabled(lblGS1Chks->isEnabled());
     chkRInit->setEnabled(m_bc.bc.supportsReaderInit() && (m_bc.bc.inputMode() & 0x07) != GS1_MODE);
     chkCompliantHeight->setEnabled(m_bc.bc.hasCompliantHeight());
 
@@ -3381,6 +3501,7 @@ void MainWindow::update_preview()
     m_bc.bc.setCompliantHeight(chkCompliantHeight->isEnabled() && chkCompliantHeight->isChecked());
     m_bc.bc.setECI(cmbECI->isEnabled() ? cmbECI->currentIndex() : 0);
     m_bc.bc.setGS1Parens(chkGS1Parens->isEnabled() && chkGS1Parens->isChecked());
+    m_bc.bc.setGS1Raw(chkGS1Raw->isEnabled() && chkGS1Raw->isChecked());
     m_bc.bc.setGS1NoCheck(chkGS1NoCheck->isEnabled() && chkGS1NoCheck->isChecked());
     if (chkGS1Strict->isVisible()) {
         m_bc.bc.setGS1SyntaxEngine(chkGS1Strict->isEnabled() && chkGS1Strict->isChecked());
@@ -3584,30 +3705,22 @@ void MainWindow::copy_to_clipboard(const QString &filename, const QString& name,
 {
     QClipboard *clipboard = QGuiApplication::clipboard();
 
-    if (!m_bc.bc.save_to_file(filename)) {
+    QByteArray fdata;
+    if (!m_bc.bc.save_to_memfile(filename, fdata)) {
         return;
     }
 
     QMimeData *mdata = new QMimeData;
     if (mimeType) {
-        QFile file(filename);
-        if (!file.open(QIODevice::ReadOnly)) {
-            delete mdata;
-        } else {
-            mdata->setData(mimeType, file.readAll());
-            file.close();
-            clipboard->setMimeData(mdata, QClipboard::Clipboard);
-            /*: %1 is format (BMP/EMF etc) */
-            statusBar->showMessage(tr("Copied to clipboard as %1").arg(name), 0 /*No timeout*/);
-        }
+        mdata->setData(mimeType, fdata);
     } else {
-        mdata->setImageData(QImage(filename));
-        clipboard->setMimeData(mdata, QClipboard::Clipboard);
-        /*: %1 is format (BMP/EMF etc) */
-        statusBar->showMessage(tr("Copied to clipboard as %1").arg(name), 0 /*No timeout*/);
+        QImage img;
+        img.loadFromData(fdata);
+        mdata->setImageData(img);
     }
-
-    QFile::remove(filename);
+    clipboard->setMimeData(mdata, QClipboard::Clipboard);
+    /*: %1 is format (BMP/EMF etc) */
+    statusBar->showMessage(tr("Copied to clipboard as %1").arg(name), 0 /*No timeout*/);
 }
 
 void MainWindow::errtxtBar_clear()
@@ -3667,32 +3780,33 @@ void MainWindow::automatic_info_set()
     }
 
     if (symbology == BARCODE_AZTEC || symbology == BARCODE_HIBC_AZTEC) {
-        if ((txt = m_optionWidget->findChild<QLineEdit*>(QSL("txtAztecAutoInfo")))) {
+        if ((txt = get_txt(QSL("txtAztecAutoInfo")))) {
             if (!isError) {
-                const int w = m_bc.bc.encodedWidth();
                 const int z = m_bc.bc.encodedOption2();
                 const int ecc = m_bc.bc.encodedOption1() >> 8; // Percentage
-                QString sizeStr, eccStr;
-                if (z >= 1 && z <= 36) {
-                    if (z <= 4) {
-                        sizeStr = QSL("%1 X %2 Compact (Zint %3)").arg(w).arg(w).arg(z);
-                    } else {
-                        sizeStr = QSL("%1 X %2 (%3 Layers) (Zint %4)").arg(w).arg(w).arg(z - 4).arg(z);
-                    }
-                }
+                QString eccStr;
                 if (ecc > 0 && ecc < 100) {
                     eccStr = QSL("%1% + 3 words").arg(ecc);
                 } else {
                     eccStr = QSL("3 words");
                 }
-                if (get_rad_val("radAztecAuto") && !sizeStr.isEmpty() && !eccStr.isEmpty()) {
-                    txt->setText(QSL("%1, ECC %2").arg(sizeStr).arg(eccStr));
-                } else if (get_rad_val("radAztecSize") && !eccStr.isEmpty()) {
-                    txt->setText(QSL("ECC %1").arg(eccStr));
-                } else if (get_rad_val("radAztecECC") && !sizeStr.isEmpty()) {
-                    txt->setText(sizeStr);
+                txt->setText(QSL("ECC %1").arg(eccStr));
+                if (get_rad_val("radAztecSize")) {
+                    set_cmb_index(QSL("cmbAztecSize"),
+                                    m_aztecSizeIndex == -1 ? z >= 1 && z <= 36 ? z - 1 : 0 : m_aztecSizeIndex);
+                } else if (z >= 1 && z <= 36) {
+                    set_cmb_index(QSL("cmbAztecSize"), z - 1);
+                }
+                if (get_rad_val("radAztecECC")) {
+                    set_cmb_index(QSL("cmbAztecECC"), m_aztecECCIndex == -1 ? 1 /*>=23%+3*/ : m_aztecECCIndex);
                 } else {
-                    txt->setText(QSEmpty);
+                    static int ecc_percents[] = { 10, 23, 36, 50 };
+                    for (int i = ARRAY_SIZE(ecc_percents) - 1; i >= 0; i--) {
+                        if (ecc >= ecc_percents[i]) {
+                            set_cmb_index(QSL("cmbAztecECC"), i);
+                            break;
+                        }
+                    }
                 }
             } else {
                 txt->setText(QSEmpty);
@@ -3700,7 +3814,7 @@ void MainWindow::automatic_info_set()
         }
 
     } else if (symbology == BARCODE_CHANNEL) {
-        if ((cmb = m_optionWidget->findChild<QComboBox*>(QSL("cmbChannel")))) {
+        if ((cmb = get_cmb(QSL("cmbChannel")))) {
             if (!isError && cmb->currentIndex() == 0 && (opt = m_bc.bc.encodedOption2()) >= 3 && opt <= 8) {
                 cmb->setItemText(0, QSL("Automatic %1").arg(opt));
             } else {
@@ -3709,14 +3823,14 @@ void MainWindow::automatic_info_set()
         }
 
     } else if (symbology == BARCODE_CODABLOCKF || symbology == BARCODE_HIBC_BLOCKF) {
-        if ((cmb = m_optionWidget->findChild<QComboBox*>(QSL("cmbCbfWidth")))) {
+        if ((cmb = get_cmb(QSL("cmbCbfWidth")))) {
             if (!isError && cmb->currentIndex() == 0 && (opt = m_bc.bc.encodedOption2()) >= 9 && opt <= 67) {
                 cmb->setItemText(0, QSL("Automatic %1 (%2 data)").arg(opt).arg(opt - 5));
             } else {
                 cmb->setItemText(0, QSL("Automatic"));
             }
         }
-        if ((cmb = m_optionWidget->findChild<QComboBox*>(QSL("cmbCbfHeight")))) {
+        if ((cmb = get_cmb(QSL("cmbCbfHeight")))) {
             if (!isError && cmb->currentIndex() == 0 && (opt = m_bc.bc.encodedOption1()) >= 1 && opt <= 44) {
                 cmb->setItemText(0, QSL("Automatic %1").arg(opt));
             } else {
@@ -3725,7 +3839,7 @@ void MainWindow::automatic_info_set()
         }
 
     } else if (symbology == BARCODE_CODE16K) {
-        if ((cmb = m_optionWidget->findChild<QComboBox*>(QSL("cmbC16kRows")))) {
+        if ((cmb = get_cmb(QSL("cmbC16kRows")))) {
             if (!isError && cmb->currentIndex() == 0 && (opt = m_bc.bc.encodedOption1()) >= 2 && opt <= 16) {
                 cmb->setItemText(0, QSL("Automatic %1").arg(opt));
             } else {
@@ -3734,7 +3848,7 @@ void MainWindow::automatic_info_set()
         }
 
     } else if (symbology == BARCODE_CODE49) {
-        if ((cmb = m_optionWidget->findChild<QComboBox*>(QSL("cmbC49Rows")))) {
+        if ((cmb = get_cmb(QSL("cmbC49Rows")))) {
             if (!isError && cmb->currentIndex() == 0 && (opt = m_bc.bc.encodedOption1()) >= 2 && opt <= 8) {
                 cmb->setItemText(0, QSL("Automatic %1").arg(opt));
             } else {
@@ -3743,7 +3857,7 @@ void MainWindow::automatic_info_set()
         }
 
     } else if (symbology == BARCODE_CODEONE) {
-        if ((cmb = m_optionWidget->findChild<QComboBox*>(QSL("cmbC1Size")))) {
+        if ((cmb = get_cmb(QSL("cmbC1Size")))) {
             if (!isError && cmb->currentIndex() == 0 && (opt = m_bc.bc.encodedOption2()) >= 1 && opt <= 8) {
                 const int r = m_bc.bc.encodedRows();
                 const int w = m_bc.bc.encodedWidth();
@@ -3757,7 +3871,7 @@ void MainWindow::automatic_info_set()
         }
 
     } else if (symbology == BARCODE_DATAMATRIX || symbology == BARCODE_HIBC_DM) {
-        if ((cmb = m_optionWidget->findChild<QComboBox*>(QSL("cmbDM200Size")))) {
+        if ((cmb = get_cmb(QSL("cmbDMSize")))) {
             if (!isError && cmb->currentIndex() == 0 && (opt = m_bc.bc.encodedOption2()) >= 1 && opt <= 48) {
                 const int r = m_bc.bc.encodedRows();
                 const int w = m_bc.bc.encodedWidth();
@@ -3772,7 +3886,7 @@ void MainWindow::automatic_info_set()
         }
 
     } else if (symbology == BARCODE_DBAR_EXPSTK) {
-        if ((cmb = m_optionWidget->findChild<QComboBox*>(QSL("cmbDBESCols")))) {
+        if ((cmb = get_cmb(QSL("cmbDBESCols")))) {
             if (!isError && cmb->currentIndex() == 0 && (opt = m_bc.bc.encodedOption2()) >= 1 && opt <= 11) {
                 cmb->setItemText(0, QSL("Automatic %1 (%2 segments)").arg(opt).arg(opt * 2));
             } else {
@@ -3781,7 +3895,7 @@ void MainWindow::automatic_info_set()
         }
 
     } else if (symbology == BARCODE_MAILMARK_2D) {
-        if ((cmb = m_optionWidget->findChild<QComboBox*>(QSL("cmbMailmark2DSize")))) {
+        if ((cmb = get_cmb(QSL("cmbMailmark2DSize")))) {
             if (!isError && cmb->currentIndex() == 0 && (opt = m_bc.bc.encodedOption2())
                     && (opt == 8 || opt == 10 || opt == 30)) {
                 const int r = m_bc.bc.encodedRows();
@@ -3793,21 +3907,21 @@ void MainWindow::automatic_info_set()
         }
 
     } else if (symbology == BARCODE_DOTCODE) {
-        if ((cmb = m_optionWidget->findChild<QComboBox*>(QSL("cmbDotCols")))) {
+        if ((cmb = get_cmb(QSL("cmbDotCols")))) {
             if (!isError && cmb->currentIndex() == 0 && (opt = m_bc.bc.encodedOption2()) >= 5 && opt <= 200) {
                 cmb->setItemText(0, QSL("Automatic %1").arg(opt));
             } else {
                 cmb->setItemText(0, QSL("Automatic"));
             }
         }
-        if ((lbl = m_optionWidget->findChild<QLabel*>(QSL("lblDotSizeMsg")))) {
+        if ((lbl = get_lbl(QSL("lblDotSizeMsg")))) {
             if (!isError) {
                 lbl->setText(QSL("%1x%2 (HxW)").arg(m_bc.bc.encodedRows()).arg(m_bc.bc.encodedWidth()));
             } else {
                 lbl->setText(QSEmpty);
             }
         }
-        if ((cmb = m_optionWidget->findChild<QComboBox*>(QSL("cmbDotMask")))) {
+        if ((cmb = get_cmb(QSL("cmbDotMask")))) {
             if (!isError && cmb->currentIndex() == 0 && (opt = (m_bc.bc.encodedOption3() >> 8)) >= 1 && opt <= 8) {
                 QString mask = QString::number((opt - 1) & 0x3);
                 if (opt > 4) {
@@ -3820,7 +3934,7 @@ void MainWindow::automatic_info_set()
         }
 
     } else if (symbology == BARCODE_GRIDMATRIX) {
-        if ((cmb = m_optionWidget->findChild<QComboBox*>(QSL("cmbGridSize")))) {
+        if ((cmb = get_cmb(QSL("cmbGridSize")))) {
             if (!isError && cmb->currentIndex() == 0 && (opt = m_bc.bc.encodedOption2()) >= 1 && opt <= 13) {
                 const int r = m_bc.bc.encodedRows();
                 cmb->setItemText(0, QSL("Automatic %1 x %2 (Version %3)").arg(r).arg(r).arg(opt));
@@ -3828,7 +3942,7 @@ void MainWindow::automatic_info_set()
                 cmb->setItemText(0, QSL("Automatic"));
             }
         }
-        if ((cmb = m_optionWidget->findChild<QComboBox*>(QSL("cmbGridECC")))) {
+        if ((cmb = get_cmb(QSL("cmbGridECC")))) {
             if (!isError && cmb->currentIndex() == 0 && (opt = m_bc.bc.encodedOption1()) >= 1 && opt <= 5) {
                 cmb->setItemText(0, QSL("Automatic ~%1%").arg(opt * 10));
             } else {
@@ -3837,7 +3951,7 @@ void MainWindow::automatic_info_set()
         }
 
     } else if (symbology == BARCODE_HANXIN) {
-        if ((cmb = m_optionWidget->findChild<QComboBox*>(QSL("cmbHXSize")))) {
+        if ((cmb = get_cmb(QSL("cmbHXSize")))) {
             if (!isError && cmb->currentIndex() == 0 && (opt = m_bc.bc.encodedOption2()) >= 1 && opt <= 84) {
                 const int r = m_bc.bc.encodedRows();
                 cmb->setItemText(0, QSL("Automatic %1 x %2 (Version %3)").arg(r).arg(r).arg(opt));
@@ -3845,7 +3959,7 @@ void MainWindow::automatic_info_set()
                 cmb->setItemText(0, QSL("Automatic"));
             }
         }
-        if ((cmb = m_optionWidget->findChild<QComboBox*>(QSL("cmbHXECC")))) {
+        if ((cmb = get_cmb(QSL("cmbHXECC")))) {
             if (!isError && cmb->currentIndex() == 0 && (opt = m_bc.bc.encodedOption1()) >= 1 && opt <= 4) {
                 static const char *eccPercents[4] = { "~8%", "~15%", "~23%", "~30%" };
                 cmb->setItemText(0, QSL("Automatic %1 (Level L%2)").arg(eccPercents[opt - 1]).arg(opt));
@@ -3853,7 +3967,7 @@ void MainWindow::automatic_info_set()
                 cmb->setItemText(0, QSL("Automatic"));
             }
         }
-        if ((cmb = m_optionWidget->findChild<QComboBox*>(QSL("cmbHXMask")))) {
+        if ((cmb = get_cmb(QSL("cmbHXMask")))) {
             if (!isError && cmb->currentIndex() == 0 && (opt = (m_bc.bc.encodedOption3() >> 8)) >= 1 && opt <= 4) {
                 cmb->setItemText(0, QSL("Automatic %1").arg(opt - 1));
             } else {
@@ -3862,14 +3976,14 @@ void MainWindow::automatic_info_set()
         }
 
     } else if (symbology == BARCODE_MICROPDF417 || symbology == BARCODE_HIBC_MICPDF) {
-        if ((cmb = m_optionWidget->findChild<QComboBox*>(QSL("cmbMPDFCols")))) {
+        if ((cmb = get_cmb(QSL("cmbMPDFCols")))) {
             if (!isError && cmb->currentIndex() == 0 && (opt = m_bc.bc.encodedOption2()) >= 1 && opt <= 4) {
                 cmb->setItemText(0, QSL("Automatic %1").arg(opt));
             } else {
                 cmb->setItemText(0, QSL("Automatic"));
             }
         }
-        if ((lbl = m_optionWidget->findChild<QLabel*>(QSL("lblMPDFECCMsg")))) {
+        if ((lbl = get_lbl(QSL("lblMPDFECCMsg")))) {
             if (!isError && (opt = (m_bc.bc.encodedOption1() >> 8)) >= 0 && opt <= 99) {
                 lbl->setText(QSL("%1%").arg(opt));
             } else {
@@ -3878,7 +3992,7 @@ void MainWindow::automatic_info_set()
         }
 
     } else if (symbology == BARCODE_MICROQR) {
-        if ((cmb = m_optionWidget->findChild<QComboBox*>(QSL("cmbMQRSize")))) {
+        if ((cmb = get_cmb(QSL("cmbMQRSize")))) {
             if (!isError && cmb->currentIndex() == 0 && (opt = m_bc.bc.encodedOption2()) >= 1 && opt <= 4) {
                 const int r = m_bc.bc.encodedRows();
                 cmb->setItemText(0, QSL("Automatic %1 x %2 (M%3)").arg(r).arg(r).arg(opt));
@@ -3886,14 +4000,14 @@ void MainWindow::automatic_info_set()
                 cmb->setItemText(0, QSL("Automatic"));
             }
         }
-        if ((cmb = m_optionWidget->findChild<QComboBox*>(QSL("cmbMQRECC")))) {
+        if ((cmb = get_cmb(QSL("cmbMQRECC")))) {
             if (!isError && cmb->currentIndex() == 0 && (opt = m_bc.bc.encodedOption1()) >= 1 && opt <= 3) {
                 cmb->setItemText(0, QSL("Automatic %1 (Level %2)").arg(qrECCPercents[opt - 1]).arg(qrECCs[opt - 1]));
             } else {
                 cmb->setItemText(0, QSL("Automatic"));
             }
         }
-        if ((cmb = m_optionWidget->findChild<QComboBox*>(QSL("cmbMQRMask")))) {
+        if ((cmb = get_cmb(QSL("cmbMQRMask")))) {
             if (!isError && cmb->currentIndex() == 0 && (opt = (m_bc.bc.encodedOption3() >> 8)) >= 1 && opt <= 4) {
                 cmb->setItemText(0, QSL("Automatic %1").arg(opt - 1));
             } else {
@@ -3902,21 +4016,21 @@ void MainWindow::automatic_info_set()
         }
 
     } else if (symbology == BARCODE_PDF417 || symbology == BARCODE_PDF417COMP || symbology == BARCODE_HIBC_PDF) {
-        if ((cmb = m_optionWidget->findChild<QComboBox*>(QSL("cmbPDFCols")))) {
+        if ((cmb = get_cmb(QSL("cmbPDFCols")))) {
             if (!isError && cmb->currentIndex() == 0 && (opt = m_bc.bc.encodedOption2()) >= 1 && opt <= 30) {
                 cmb->setItemText(0, QSL("Automatic %1").arg(opt));
             } else {
                 cmb->setItemText(0, QSL("Automatic"));
             }
         }
-        if ((cmb = m_optionWidget->findChild<QComboBox*>(QSL("cmbPDFRows")))) {
+        if ((cmb = get_cmb(QSL("cmbPDFRows")))) {
             if (!isError && cmb->currentIndex() == 0 && (opt = m_bc.bc.encodedRows()) >= 3 && opt <= 90) {
                 cmb->setItemText(0, QSL("Automatic %1").arg(opt));
             } else {
                 cmb->setItemText(0, QSL("Automatic"));
             }
         }
-        if ((cmb = m_optionWidget->findChild<QComboBox*>(QSL("cmbPDFECC")))) {
+        if ((cmb = get_cmb(QSL("cmbPDFECC")))) {
             if (!isError && cmb->currentIndex() == 0 && (opt = m_bc.bc.encodedOption1()) >= 0 && opt <= 8) {
                 cmb->setItemText(0, QSL("Automatic %1 (%2 words)").arg(opt).arg(2 << opt));
             } else {
@@ -3925,7 +4039,7 @@ void MainWindow::automatic_info_set()
         }
 
     } else if (symbology == BARCODE_QRCODE || symbology == BARCODE_HIBC_QR) {
-        if ((cmb = m_optionWidget->findChild<QComboBox*>(QSL("cmbQRSize")))) {
+        if ((cmb = get_cmb(QSL("cmbQRSize")))) {
             if (!isError && cmb->currentIndex() == 0 && (opt = m_bc.bc.encodedOption2()) >= 1 && opt <= 40) {
                 const int r = m_bc.bc.encodedRows();
                 cmb->setItemText(0, QSL("Automatic %1 x %2 (Version %3)").arg(r).arg(r).arg(opt));
@@ -3933,14 +4047,14 @@ void MainWindow::automatic_info_set()
                 cmb->setItemText(0, QSL("Automatic"));
             }
         }
-        if ((cmb = m_optionWidget->findChild<QComboBox*>(QSL("cmbQRECC")))) {
+        if ((cmb = get_cmb(QSL("cmbQRECC")))) {
             if (!isError && cmb->currentIndex() == 0 && (opt = m_bc.bc.encodedOption1()) >= 1 && opt <= 4) {
                 cmb->setItemText(0, QSL("Automatic %1 (Level %2)").arg(qrECCPercents[opt - 1]).arg(qrECCs[opt - 1]));
             } else {
                 cmb->setItemText(0, QSL("Automatic"));
             }
         }
-        if ((cmb = m_optionWidget->findChild<QComboBox*>(QSL("cmbQRMask")))) {
+        if ((cmb = get_cmb(QSL("cmbQRMask")))) {
             if (!isError && cmb->currentIndex() == 0 && (opt = (m_bc.bc.encodedOption3() >> 8)) >= 1 && opt <= 8) {
                 cmb->setItemText(0, QSL("Automatic %1").arg(opt - 1));
             } else {
@@ -3949,7 +4063,7 @@ void MainWindow::automatic_info_set()
         }
 
     } else if (symbology == BARCODE_RMQR) {
-        if ((cmb = m_optionWidget->findChild<QComboBox*>(QSL("cmbRMQRSize")))) {
+        if ((cmb = get_cmb(QSL("cmbRMQRSize")))) {
             if (!isError && cmb->currentIndex() == 0 && (opt = m_bc.bc.encodedOption2()) >= 1 && opt <= 38) {
                 const int r = m_bc.bc.encodedRows();
                 const int w = m_bc.bc.encodedWidth();
@@ -3958,7 +4072,7 @@ void MainWindow::automatic_info_set()
                 cmb->setItemText(0, QSL("Automatic"));
             }
         }
-        if ((cmb = m_optionWidget->findChild<QComboBox*>(QSL("cmbRMQRECC")))) {
+        if ((cmb = get_cmb(QSL("cmbRMQRECC")))) {
             if (!isError && cmb->currentIndex() == 0 && (opt = m_bc.bc.encodedOption1()) && (opt == 2 || opt == 4)) {
                 cmb->setItemText(0, QSL("Automatic %1 (Level %2)").arg(qrECCPercents[opt - 1]).arg(qrECCs[opt - 1]));
             } else {
@@ -3967,7 +4081,7 @@ void MainWindow::automatic_info_set()
         }
 
     } else if (symbology == BARCODE_ULTRA) {
-        if ((txt = m_optionWidget->findChild<QLineEdit*>(QSL("txtUltraAutoInfo")))) {
+        if ((txt = get_txt(QSL("txtUltraAutoInfo")))) {
             if (!isError) {
                 static const QString eccStrs[6] = {
                     "Error Detection Only", "Approx 5%", "Approx 9%", "Approx 17%", "Approx 25%", "Approx 33%"
@@ -3990,7 +4104,7 @@ void MainWindow::automatic_info_set()
         }
 
     } else if (symbology == BARCODE_UPNQR) {
-        if ((cmb = m_optionWidget->findChild<QComboBox*>(QSL("cmbUPNQRMask")))) {
+        if ((cmb = get_cmb(QSL("cmbUPNQRMask")))) {
             if (!isError && cmb->currentIndex() == 0 && (opt = (m_bc.bc.encodedOption3() >> 8)) >= 1 && opt <= 8) {
                 cmb->setItemText(0, QSL("Automatic %1").arg(opt - 1));
             } else {
@@ -4017,6 +4131,60 @@ QPoint MainWindow::get_context_menu_pos(const QPoint &pos, QWidget *widget)
 QWidget *MainWindow::get_widget(const QString &name)
 {
     return m_optionWidget ? m_optionWidget->findChild<QWidget*>(name) : nullptr;
+}
+
+/* Shorthand to find pushbutton child */
+QPushButton *MainWindow::get_btn(const QString &name)
+{
+    return m_optionWidget ? m_optionWidget->findChild<QPushButton*>(name) : nullptr;
+}
+
+/* Shorthand to find checkbox child */
+QCheckBox *MainWindow::get_chk(const QString &name)
+{
+    return m_optionWidget ? m_optionWidget->findChild<QCheckBox*>(name) : nullptr;
+}
+
+/* Shorthand to find combobox child */
+QComboBox *MainWindow::get_cmb(const QString &name)
+{
+    return m_optionWidget ? m_optionWidget->findChild<QComboBox*>(name) : nullptr;
+}
+
+/* Shorthand to find doublespinbox child */
+QDoubleSpinBox *MainWindow::get_dspn(const QString &name)
+{
+    return m_optionWidget ? m_optionWidget->findChild<QDoubleSpinBox*>(name) : nullptr;
+}
+
+/* Shorthand to find groupbox child */
+QGroupBox *MainWindow::get_groupBox(const QString &name)
+{
+    return m_optionWidget ? m_optionWidget->findChild<QGroupBox*>(name) : nullptr;
+}
+
+/* Shorthand to find label child */
+QLabel *MainWindow::get_lbl(const QString &name)
+{
+    return m_optionWidget ? m_optionWidget->findChild<QLabel*>(name) : nullptr;
+}
+
+/* Shorthand to find radiobutton child */
+QRadioButton *MainWindow::get_rad(const QString &name)
+{
+    return m_optionWidget ? m_optionWidget->findChild<QRadioButton*>(name) : nullptr;
+}
+
+/* Shorthand to find spinbox child */
+QSpinBox *MainWindow::get_spn(const QString &name)
+{
+    return m_optionWidget ? m_optionWidget->findChild<QSpinBox*>(name) : nullptr;
+}
+
+/* Shorthand to find spinbox child */
+QLineEdit *MainWindow::get_txt(const QString &name)
+{
+    return m_optionWidget ? m_optionWidget->findChild<QLineEdit*>(name) : nullptr;
 }
 
 /* Return settings subsection name for a symbol */
@@ -4093,7 +4261,7 @@ int MainWindow::get_rad_grp_index(const QStringList &names)
     if (m_optionWidget) {
         QRadioButton *radioButton;
         for (int index = 0; index < names.size(); index++) {
-            radioButton = m_optionWidget->findChild<QRadioButton*>(names[index]);
+            radioButton = get_rad(names[index]);
             if (radioButton && radioButton->isChecked()) {
                 return index;
             }
@@ -4110,9 +4278,9 @@ void MainWindow::set_rad_from_setting(QSettings &settings, const QString &settin
         int index = settings.value(setting, default_val).toInt();
         QRadioButton *radioButton;
         if (index >= 0 && index < names.size()) {
-            radioButton = m_optionWidget->findChild<QRadioButton*>(names[index]);
+            radioButton = get_rad(names[index]);
         } else {
-            radioButton = m_optionWidget->findChild<QRadioButton*>(names[0]);
+            radioButton = get_rad(names[0]);
         }
         if (radioButton) {
             radioButton->setChecked(true);
@@ -4123,22 +4291,31 @@ void MainWindow::set_rad_from_setting(QSettings &settings, const QString &settin
 /* Helper to see if radio button checked, checking for NULL and whether enabled */
 bool MainWindow::get_rad_val(const QString &name)
 {
-    QRadioButton *radioButton = m_optionWidget ? m_optionWidget->findChild<QRadioButton*>(name) : nullptr;
+    QRadioButton *radioButton = get_rad(name);
     return radioButton && radioButton->isEnabled() && radioButton->isChecked();
 }
 
 /* Helper to return index of selected item in combobox, checking for NULL */
 int MainWindow::get_cmb_index(const QString &name)
 {
-    QComboBox *comboBox = m_optionWidget ? m_optionWidget->findChild<QComboBox*>(name) : nullptr;
+    QComboBox *comboBox = get_cmb(name);
     return comboBox ? comboBox->currentIndex() : 0;
+}
+
+/* Helper to set item in combobox from index in settings, checking for NULL */
+void MainWindow::set_cmb_index(const QString &name, const int index)
+{
+    QComboBox *comboBox = get_cmb(name);
+    if (comboBox) {
+        comboBox->setCurrentIndex(index);
+    }
 }
 
 /* Helper to set item in combobox from index in settings, checking for NULL */
 void MainWindow::set_cmb_from_setting(QSettings &settings, const QString &setting, const QString &name,
             int default_val)
 {
-    QComboBox *comboBox = m_optionWidget ? m_optionWidget->findChild<QComboBox*>(name) : nullptr;
+    QComboBox *comboBox = get_cmb(name);
     if (comboBox) {
         comboBox->setCurrentIndex(settings.value(setting, default_val).toInt());
     }
@@ -4147,7 +4324,7 @@ void MainWindow::set_cmb_from_setting(QSettings &settings, const QString &settin
 /* Helper to return if checkbox checked, checking for NULL */
 int MainWindow::get_chk_val(const QString &name)
 {
-    QCheckBox *checkBox = m_optionWidget ? m_optionWidget->findChild<QCheckBox*>(name) : nullptr;
+    QCheckBox *checkBox = get_chk(name);
     return checkBox && checkBox->isChecked() ? 1 : 0;
 }
 
@@ -4155,7 +4332,7 @@ int MainWindow::get_chk_val(const QString &name)
 void MainWindow::set_chk_from_setting(QSettings &settings, const QString &setting, const QString &name,
             int default_val)
 {
-    QCheckBox *checkBox = m_optionWidget ? m_optionWidget->findChild<QCheckBox*>(name) : nullptr;
+    QCheckBox *checkBox = get_chk(name);
     if (checkBox) {
         checkBox->setChecked(settings.value(setting, default_val).toInt() ? true : false);
     }
@@ -4164,7 +4341,7 @@ void MainWindow::set_chk_from_setting(QSettings &settings, const QString &settin
 /* Helper to return value of double spinner, checking for NULL */
 double MainWindow::get_dspn_val(const QString &name)
 {
-    QDoubleSpinBox *spinBox = m_optionWidget->findChild<QDoubleSpinBox*>(name);
+    QDoubleSpinBox *spinBox = get_dspn(name);
     return spinBox ? spinBox->value() : 0.0;
 }
 
@@ -4172,7 +4349,7 @@ double MainWindow::get_dspn_val(const QString &name)
 void MainWindow::set_dspn_from_setting(QSettings &settings, const QString &setting, const QString &name,
             float default_val)
 {
-    QDoubleSpinBox *spinBox = m_optionWidget->findChild<QDoubleSpinBox*>(name);
+    QDoubleSpinBox *spinBox = get_dspn(name);
     if (spinBox) {
         spinBox->setValue(settings.value(setting, default_val).toFloat());
     }
@@ -4181,7 +4358,7 @@ void MainWindow::set_dspn_from_setting(QSettings &settings, const QString &setti
 /* Helper to return text of line edit, checking for NULL */
 QString MainWindow::get_txt_val(const QString &name)
 {
-    QLineEdit *lineEdit = m_optionWidget ? m_optionWidget->findChild<QLineEdit*>(name) : nullptr;
+    QLineEdit *lineEdit = get_txt(name);
     return lineEdit ? lineEdit->text() : QSEmpty;
 }
 
@@ -4189,7 +4366,7 @@ QString MainWindow::get_txt_val(const QString &name)
 void MainWindow::set_txt_from_setting(QSettings &settings, const QString &setting, const QString &name,
             const QString &default_val)
 {
-    QLineEdit *lineEdit = m_optionWidget ? m_optionWidget->findChild<QLineEdit*>(name) : nullptr;
+    QLineEdit *lineEdit = get_txt(name);
     if (lineEdit) {
         lineEdit->setText(settings.value(setting, default_val).toString());
     }
@@ -4198,7 +4375,7 @@ void MainWindow::set_txt_from_setting(QSettings &settings, const QString &settin
 /* Helper to return value of spin box, checking for NULL */
 int MainWindow::get_spn_val(const QString &name)
 {
-    QSpinBox *spinBox = m_optionWidget ? m_optionWidget->findChild<QSpinBox*>(name) : nullptr;
+    QSpinBox *spinBox = get_spn(name);
     return spinBox ? spinBox->value() : 0;
 }
 
@@ -4206,7 +4383,7 @@ int MainWindow::get_spn_val(const QString &name)
 void MainWindow::set_spn_from_setting(QSettings &settings, const QString &setting, const QString &name,
             int default_val)
 {
-    QSpinBox *spinBox = m_optionWidget ? m_optionWidget->findChild<QSpinBox*>(name) : nullptr;
+    QSpinBox *spinBox = get_spn(name);
     if (spinBox) {
         spinBox->setValue(settings.value(setting, default_val).toInt());
     }
@@ -4223,11 +4400,9 @@ void MainWindow::save_sub_settings(QSettings &settings, int symbology)
             settings.setValue(QSL("studio/bc/%1/data_seg2").arg(name), txtDataSeg2->text());
             settings.setValue(QSL("studio/bc/%1/data_seg3").arg(name), txtDataSeg3->text());
         }
-        if (!grpComposite->isHidden()) {
-            settings.setValue(QSL("studio/bc/%1/composite_text").arg(name), txtComposite->toPlainText());
-            settings.setValue(QSL("studio/bc/%1/chk_composite").arg(name), chkComposite->isChecked() ? 1 : 0);
-            settings.setValue(QSL("studio/bc/%1/comp_type").arg(name), cmbCompType->currentIndex());
-        }
+        settings.setValue(QSL("studio/bc/%1/composite_text").arg(name), txtComposite->toPlainText());
+        settings.setValue(QSL("studio/bc/%1/chk_composite").arg(name), chkComposite->isChecked() ? 1 : 0);
+        settings.setValue(QSL("studio/bc/%1/comp_type").arg(name), cmbCompType->currentIndex());
         if (cmbECI->isEnabled()) {
             settings.setValue(QSL("studio/bc/%1/eci").arg(name), cmbECI->currentIndex());
             settings.setValue(QSL("studio/bc/%1/eci_seg1").arg(name), cmbECISeg1->currentIndex());
@@ -4240,7 +4415,9 @@ void MainWindow::save_sub_settings(QSettings &settings, int symbology)
             settings.setValue(QSL("studio/bc/%1/chk_rinit").arg(name), chkRInit->isChecked() ? 1 : 0);
         }
         settings.setValue(QSL("studio/bc/%1/chk_gs1parens").arg(name), chkGS1Parens->isChecked() ? 1 : 0);
+        settings.setValue(QSL("studio/bc/%1/chk_gs1raw").arg(name), chkGS1Raw->isChecked() ? 1 : 0);
         settings.setValue(QSL("studio/bc/%1/chk_gs1nocheck").arg(name), chkGS1NoCheck->isChecked() ? 1 : 0);
+        settings.setValue(QSL("studio/bc/%1/chk_gs1strict").arg(name), chkGS1Strict->isChecked() ? 1 : 0);
         if (chkAutoHeight->isEnabled()) {
             settings.setValue(
                 QSL("studio/bc/%1/appearance/autoheight").arg(name), chkAutoHeight->isChecked() ? 1 : 0);
@@ -4330,11 +4507,14 @@ void MainWindow::save_sub_settings(QSettings &settings, int symbology)
         case BARCODE_HIBC_AZTEC:
             settings.setValue(QSL("studio/bc/aztec/autoresizing"), get_rad_grp_index(
                 QStringList() << QSL("radAztecAuto") << QSL("radAztecSize") << QSL("radAztecECC")));
-            settings.setValue(QSL("studio/bc/aztec/size"), get_cmb_index(QSL("cmbAztecSize")));
-            settings.setValue(QSL("studio/bc/aztec/ecc"), get_cmb_index(QSL("cmbAztecECC")));
+            settings.setValue(QSL("studio/bc/aztec/size"), m_aztecSizeIndex);
+            settings.setValue(QSL("studio/bc/aztec/ecc"), m_aztecECCIndex);
             settings.setValue(QSL("studio/bc/aztec/encoding_mode"), get_rad_grp_index(
-                QStringList() << QSL("radAztecStand") << QSL("radAztecGS1") << QSL("radAztecHIBC")));
+                QStringList() << QSL("radAztecStand") << QSL("radAztecGS1") << QSL("radAztecHIBC")
+                                << QSL("radAztecExtraEsc")));
             settings.setValue(QSL("studio/bc/aztec/structapp_count"), get_cmb_index(QSL("cmbAztecStructAppCount")));
+            settings.setValue(QSL("studio/bc/aztec/chk_full"), get_chk_val(QSL("chkAztecFull")));
+            settings.setValue(QSL("studio/bc/aztec/chk_fast"), get_chk_val(QSL("chkAztecFast")));
             settings.setValue(QSL("studio/bc/aztec/structapp_index"), get_cmb_index(QSL("cmbAztecStructAppIndex")));
             settings.setValue(QSL("studio/bc/aztec/structapp_id"), get_txt_val(QSL("txtAztecStructAppID")));
             break;
@@ -4423,12 +4603,14 @@ void MainWindow::save_sub_settings(QSettings &settings, int symbology)
 
         case BARCODE_DATAMATRIX:
         case BARCODE_HIBC_DM:
-            settings.setValue(QSL("studio/bc/datamatrix/size"), get_cmb_index(QSL("cmbDM200Size")));
+            settings.setValue(QSL("studio/bc/datamatrix/size"), get_cmb_index(QSL("cmbDMSize")));
             settings.setValue(QSL("studio/bc/datamatrix/encoding_mode"), get_rad_grp_index(
-                QStringList() << QSL("radDM200Stand") << QSL("radDM200GS1") << QSL("radDM200HIBC")));
+                QStringList() << QSL("radDMStand") << QSL("radDMGS1") << QSL("radDMHIBC") << QSL("radDMExtraEsc")));
             settings.setValue(QSL("studio/bc/datamatrix/chk_suppress_rect"), get_chk_val(QSL("chkDMRectangle")));
             settings.setValue(QSL("studio/bc/datamatrix/chk_allow_dmre"), get_chk_val(QSL("chkDMRE")));
             settings.setValue(QSL("studio/bc/datamatrix/chk_gs_sep"), get_chk_val(QSL("chkDMGSSep")));
+            settings.setValue(QSL("studio/bc/datamatrix/startmode"), get_cmb_index(QSL("cmbDMStartMode")));
+            settings.setValue(QSL("studio/bc/datamatrix/startmodelength"), get_spn_val(QSL("spnDMStartModeLength")));
             settings.setValue(QSL("studio/bc/datamatrix/iso_144"), get_chk_val(QSL("chkDMISO144")));
             settings.setValue(QSL("studio/bc/datamatrix/chk_fast"), get_chk_val(QSL("chkDMFast")));
             settings.setValue(QSL("studio/bc/datamatrix/structapp_count"), get_cmb_index(QSL("cmbDMStructAppCount")));
@@ -4457,7 +4639,7 @@ void MainWindow::save_sub_settings(QSettings &settings, int symbology)
             settings.setValue(QSL("studio/bc/qrcode/ecc"), get_cmb_index(QSL("cmbQRECC")));
             settings.setValue(QSL("studio/bc/qrcode/mask"), get_cmb_index(QSL("cmbQRMask")));
             settings.setValue(QSL("studio/bc/qrcode/encoding_mode"), get_rad_grp_index(
-                QStringList() << QSL("radDM200Stand") << QSL("radQRGS1") << QSL("radQRHIBC")));
+                QStringList() << QSL("radQRStand") << QSL("radQRGS1") << QSL("radQRHIBC")));
             settings.setValue(QSL("studio/bc/qrcode/chk_full_multibyte"), get_chk_val(QSL("chkQRFullMultibyte")));
             settings.setValue(QSL("studio/bc/qrcode/chk_fast_mode"), get_chk_val(QSL("chkQRFast")));
             settings.setValue(QSL("studio/bc/qrcode/structapp_count"), get_cmb_index(QSL("cmbQRStructAppCount")));
@@ -4474,7 +4656,7 @@ void MainWindow::save_sub_settings(QSettings &settings, int symbology)
             settings.setValue(QSL("studio/bc/rmqr/size"), get_cmb_index(QSL("cmbRMQRSize")));
             settings.setValue(QSL("studio/bc/rmqr/ecc"), get_cmb_index(QSL("cmbRMQRECC")));
             settings.setValue(QSL("studio/bc/rmqr/encoding_mode"), get_rad_grp_index(
-                QStringList() << QSL("radQRStand") << QSL("radRMQRGS1")));
+                QStringList() << QSL("radRMQRStand") << QSL("radRMQRGS1")));
             settings.setValue(QSL("studio/bc/rmqr/chk_full_multibyte"), get_chk_val(QSL("chkRMQRFullMultibyte")));
             break;
 
@@ -4551,6 +4733,14 @@ void MainWindow::save_sub_settings(QSettings &settings, int symbology)
 
         case BARCODE_PLESSEY:
             settings.setValue(QSL("studio/bc/plessey/chk_show_checks"), get_chk_val(QSL("chkPlesseyShowChecks")));
+            break;
+
+        case BARCODE_TELEPEN:
+            settings.setValue(QSL("studio/bc/telepen/chk_aim"), get_chk_val(QSL("chkTelepenAIM")));
+            break;
+
+        case BARCODE_TELEPEN_NUM:
+            settings.setValue(QSL("studio/bc/telepen_num/chk_aim"), get_chk_val(QSL("chkTelepenNumAIM")));
             break;
 
         case BARCODE_ULTRA:
@@ -4649,16 +4839,14 @@ void MainWindow::load_sub_settings(QSettings &settings, int symbology)
             txtDataSeg2->setText(settings.value(QSL("studio/bc/%1/data_seg2").arg(name), QSEmpty).toString());
             txtDataSeg3->setText(settings.value(QSL("studio/bc/%1/data_seg3").arg(name), QSEmpty).toString());
         }
-        if (!grpComposite->isHidden()) {
-            const QString &composite_text = settings.value(
-                                                QSL("studio/bc/%1/composite_text").arg(name), QSEmpty).toString();
-            if (!composite_text.isEmpty()) {
-                txtComposite->setText(composite_text);
-            }
-            chkComposite->setChecked(settings.value(
-                QSL("studio/bc/%1/chk_composite").arg(name), 0).toInt() ? true : false);
-            cmbCompType->setCurrentIndex(settings.value(QSL("studio/bc/%1/comp_type").arg(name), 0).toInt());
+        const QString &composite_text = settings.value(
+                                            QSL("studio/bc/%1/composite_text").arg(name), QSEmpty).toString();
+        if (!composite_text.isEmpty()) {
+            txtComposite->setText(composite_text);
         }
+        chkComposite->setChecked(settings.value(
+            QSL("studio/bc/%1/chk_composite").arg(name), 0).toInt() ? true : false);
+        cmbCompType->setCurrentIndex(settings.value(QSL("studio/bc/%1/comp_type").arg(name), 0).toInt());
         if (cmbECI->isEnabled()) {
             cmbECI->setCurrentIndex(settings.value(QSL("studio/bc/%1/eci").arg(name), 0).toInt());
             cmbECISeg1->setCurrentIndex(settings.value(QSL("studio/bc/%1/eci_seg1").arg(name), 0).toInt());
@@ -4671,8 +4859,11 @@ void MainWindow::load_sub_settings(QSettings &settings, int symbology)
             chkRInit->setChecked(settings.value(QSL("studio/bc/%1/chk_rinit").arg(name)).toInt() ? true : false);
         }
         chkGS1Parens->setChecked(settings.value(QSL("studio/bc/%1/chk_gs1parens").arg(name)).toInt() ? true : false);
+        chkGS1Raw->setChecked(settings.value( QSL("studio/bc/%1/chk_gs1raw").arg(name)).toInt() ? true : false);
         chkGS1NoCheck->setChecked(settings.value(
             QSL("studio/bc/%1/chk_gs1nocheck").arg(name)).toInt() ? true : false);
+        chkGS1Strict->setChecked(settings.value(
+            QSL("studio/bc/%1/chk_gs1strict").arg(name)).toInt() ? true : false);
         if (chkAutoHeight->isEnabled()) {
             chkAutoHeight->setChecked(settings.value(
                 QSL("studio/bc/%1/appearance/autoheight").arg(name), 1).toInt() ? true : false);
@@ -4793,10 +4984,20 @@ void MainWindow::load_sub_settings(QSettings &settings, int symbology)
         case BARCODE_HIBC_AZTEC:
             set_rad_from_setting(settings, QSL("studio/bc/aztec/autoresizing"),
                 QStringList() << QSL("radAztecAuto") << QSL("radAztecSize") << QSL("radAztecECC"));
-            set_cmb_from_setting(settings, QSL("studio/bc/aztec/size"), QSL("cmbAztecSize"));
+            m_aztecSizeIndex = settings.value(QSL("studio/bc/aztec/size"), -1).toInt();
+            if (get_rad_val(QSL("radAztecSize"))) {
+                set_cmb_index(QSL("cmbAztecSize"), m_aztecSizeIndex);
+            }
+            m_aztecECCIndex = settings.value(QSL("studio/bc/aztec/ecc"), -1).toInt();
+            if (get_rad_val(QSL("radAztecECC"))) {
+                set_cmb_index(QSL("cmbAztecECC"), m_aztecECCIndex);
+            }
             set_cmb_from_setting(settings, QSL("studio/bc/aztec/ecc"), QSL("cmbAztecECC"));
             set_rad_from_setting(settings, QSL("studio/bc/aztec/encoding_mode"),
-                QStringList() << QSL("radAztecStand") << QSL("radAztecGS1") << QSL("radAztecHIBC"));
+                QStringList() << QSL("radAztecStand") << QSL("radAztecGS1") << QSL("radAztecHIBC")
+                                << QSL("radAztecExtraEsc"));
+            set_chk_from_setting(settings, QSL("studio/bc/aztec/chk_full"), QSL("chkAztecFull"));
+            set_chk_from_setting(settings, QSL("studio/bc/aztec/chk_fast"), QSL("chkAztecFast"));
             set_cmb_from_setting(settings, QSL("studio/bc/aztec/structapp_count"), QSL("cmbAztecStructAppCount"));
             set_cmb_from_setting(settings, QSL("studio/bc/aztec/structapp_index"), QSL("cmbAztecStructAppIndex"));
             set_txt_from_setting(settings, QSL("studio/bc/aztec/structapp_id"), QSL("txtAztecStructAppID"), QSEmpty);
@@ -4889,12 +5090,14 @@ void MainWindow::load_sub_settings(QSettings &settings, int symbology)
 
         case BARCODE_DATAMATRIX:
         case BARCODE_HIBC_DM:
-            set_cmb_from_setting(settings, QSL("studio/bc/datamatrix/size"), QSL("cmbDM200Size"));
+            set_cmb_from_setting(settings, QSL("studio/bc/datamatrix/size"), QSL("cmbDMSize"));
             set_rad_from_setting(settings, QSL("studio/bc/datamatrix/encoding_mode"),
-                QStringList() << QSL("radDM200Stand") << QSL("radDM200GS1") << QSL("radDM200HIBC"));
+                QStringList() << QSL("radDMStand") << QSL("radDMGS1") << QSL("radDMHIBC") << QSL("radDMExtraEsc"));
             set_chk_from_setting(settings, QSL("studio/bc/datamatrix/chk_suppress_rect"), QSL("chkDMRectangle"));
             set_chk_from_setting(settings, QSL("studio/bc/datamatrix/chk_allow_dmre"), QSL("chkDMRE"));
             set_chk_from_setting(settings, QSL("studio/bc/datamatrix/chk_gs_sep"), QSL("chkDMGSSep"));
+            set_cmb_from_setting(settings, QSL("studio/bc/datamatrix/startmode"), QSL("cmbDMStartMode"));
+            set_spn_from_setting(settings, QSL("studio/bc/datamatrix/startmodelength"), QSL("spnDMStartModeLength"), 0);
             set_chk_from_setting(settings, QSL("studio/bc/datamatrix/iso_144"), QSL("chkDMISO144"));
             set_chk_from_setting(settings, QSL("studio/bc/datamatrix/chk_fast"), QSL("chkDMFast"));
             set_cmb_from_setting(settings, QSL("studio/bc/datamatrix/structapp_count"), QSL("cmbDMStructAppCount"));
@@ -4923,7 +5126,7 @@ void MainWindow::load_sub_settings(QSettings &settings, int symbology)
             set_cmb_from_setting(settings, QSL("studio/bc/qrcode/ecc"), QSL("cmbQRECC"));
             set_cmb_from_setting(settings, QSL("studio/bc/qrcode/mask"), QSL("cmbQRMask"));
             set_rad_from_setting(settings, QSL("studio/bc/qrcode/encoding_mode"),
-                QStringList() << QSL("radDM200Stand") << QSL("radQRGS1") << QSL("radQRHIBC"));
+                QStringList() << QSL("radQRStand") << QSL("radQRGS1") << QSL("radQRHIBC"));
             set_chk_from_setting(settings, QSL("studio/bc/qrcode/chk_full_multibyte"), QSL("chkQRFullMultibyte"));
             set_chk_from_setting(settings, QSL("studio/bc/qrcode/chk_fast_mode"), QSL("chkQRFast"));
             set_cmb_from_setting(settings, QSL("studio/bc/qrcode/structapp_count"), QSL("cmbQRStructAppCount"));
@@ -4940,7 +5143,7 @@ void MainWindow::load_sub_settings(QSettings &settings, int symbology)
             set_cmb_from_setting(settings, QSL("studio/bc/rmqr/size"), QSL("cmbRMQRSize"));
             set_cmb_from_setting(settings, QSL("studio/bc/rmqr/ecc"), QSL("cmbRMQRECC"));
             set_rad_from_setting(settings, QSL("studio/bc/rmqr/encoding_mode"),
-                QStringList() << QSL("radQRStand") << QSL("radRMQRGS1"));
+                QStringList() << QSL("radRMQRStand") << QSL("radRMQRGS1"));
             set_chk_from_setting(settings, QSL("studio/bc/rmqr/chk_full_multibyte"), QSL("chkRMQRFullMultibyte"));
             break;
 
@@ -5017,6 +5220,14 @@ void MainWindow::load_sub_settings(QSettings &settings, int symbology)
 
         case BARCODE_PLESSEY:
             set_chk_from_setting(settings, QSL("studio/bc/plessey/chk_show_checks"), QSL("chkPlesseyShowChecks"));
+            break;
+
+        case BARCODE_TELEPEN:
+            set_chk_from_setting(settings, QSL("studio/bc/telepen/chk_aim"), QSL("chkTelepenAIM"));
+            break;
+
+        case BARCODE_TELEPEN_NUM:
+            set_chk_from_setting(settings, QSL("studio/bc/telepen_num/chk_aim"), QSL("chkTelepenNumAIM"));
             break;
 
         case BARCODE_ULTRA:

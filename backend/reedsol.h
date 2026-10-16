@@ -1,10 +1,14 @@
 /*
     This is a simple Reed-Solomon encoder
     (C) Cliff Hones 2004
+    Copyright (C) 2004 Andrews & Arnold Ltd
+    Written by Cliff Hones
+    which had been re-licensed additionally under BSD-3-clause:
+    https://codeberg.org/RevK/Reedsol/src/branch/master/LICENSE
 */
 /*
     libzint - the open source barcode library
-    Copyright (C) 2009-2025 Robin Stuart <rstuart114@gmail.com>
+    Copyright (C) 2009-2026 Robin Stuart <rstuart114@gmail.com>
 
     Redistribution and use in source and binary forms, with or without
     modification, are permitted provided that the following conditions
@@ -51,8 +55,8 @@ typedef struct {
 } rs_t;
 
 typedef struct {
-    unsigned int *logt; /* These are malloced */
-    unsigned int *alog;
+    unsigned short *logt; /* These are malloced */
+    unsigned short *alog;
     unsigned short rspoly[4096]; /* Generated poly, 12-bit max - needs to be enlarged if > 12-bit used */
     unsigned int log_rspoly[4096]; /* Logs of poly */
     int nsym; /* Degree of poly */
@@ -70,6 +74,13 @@ INTERNAL void zint_rs_uint_init_code(rs_uint_t *rs_uint, const int nsym, int ind
 INTERNAL void zint_rs_uint_encode(const rs_uint_t *rs_uint, const int datalen, const unsigned int *data,
                 unsigned int *res);
 INTERNAL void zint_rs_uint_free(rs_uint_t *rs_uint);
+
+#ifdef ZINT_TEST
+/* For testing `calloc()` failure */
+#define RS_FAIL_ID_LOGT 1
+#define RS_FAIL_ID_ALOG 2
+INTERNAL void zint_test_rs_set_fail(const int id);
+#endif
 
 #ifdef __cplusplus
 }

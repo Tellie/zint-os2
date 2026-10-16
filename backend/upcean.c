@@ -1,7 +1,7 @@
 /* upcean.c - Handles UPC, EAN and ISBN */
 /*
     libzint - the open source barcode library
-    Copyright (C) 2008-2025 Robin Stuart <rstuart114@gmail.com>
+    Copyright (C) 2008-2026 Robin Stuart <rstuart114@gmail.com>
 
     Redistribution and use in source and binary forms, with or without
     modification, are permitted provided that the following conditions
@@ -85,6 +85,8 @@ static const char EANsetB[10][4] = {
     {'1','3','2','1'}, {'4','1','1','1'}, {'2','1','3','1'}, {'3','1','2','1'}, {'2','1','1','3'}
 };
 
+static const char EANones[6] = { '1','1','1','1','1','1' }; /* Various lengths used for start/stop/separators */
+
 /* Write UPC-A or EAN-8 encodation to destination `d` */
 static void upca_set_dest(const unsigned char source[], const int length, char *d) {
     int i, half_way;
@@ -92,13 +94,13 @@ static void upca_set_dest(const unsigned char source[], const int length, char *
     half_way = length / 2;
 
     /* Start character */
-    memcpy(d, "111", 3);
+    memcpy(d, EANones, 3);
     d += 3;
 
     for (i = 0; i < length; i++, d += 4) {
         if (i == half_way) {
             /* Middle character - separates manufacturer no. from product no. - also inverts right hand characters */
-            memcpy(d, "11111", 5);
+            memcpy(d, EANones, 5);
             d += 5;
         }
 
@@ -106,7 +108,9 @@ static void upca_set_dest(const unsigned char source[], const int length, char *
     }
 
     /* Stop character */
-    memcpy(d, "111", 4); /* Include terminating NUL */
+    memcpy(d, EANones, 3);
+    d += 3;
+    *d = '\0'; /* Need to NUL-terminate */
 }
 
 /* Make a UPC-A barcode, allowing for composite if `cc_rows` set */
@@ -278,7 +282,7 @@ static int upce_cc(struct zint_symbol *symbol, unsigned char source[], int lengt
     /* Take all this information and make the barcode pattern */
 
     /* Start character */
-    memcpy(d, "111", 3);
+    memcpy(d, EANones, 3);
     d += 3;
 
     for (i = 0; i < length; i++, d += 4) {
@@ -293,7 +297,9 @@ static int upce_cc(struct zint_symbol *symbol, unsigned char source[], int lengt
     }
 
     /* Stop character */
-    memcpy(d, "111111", 7); /* Include terminating NUL */
+    memcpy(d, EANones, 6);
+    d += 6;
+    *d = '\0'; /* Need to NUL-terminate */
 
     z_hrt_cat_chr_nochk(symbol, check_digit);
 
@@ -333,6 +339,7 @@ static int upce(struct zint_symbol *symbol, unsigned char source[], int length, 
 
 /* EAN-2 and EAN-5 add-on codes */
 static void ean_add_on(const unsigned char source[], const int length, char dest[], const int addon_gap) {
+    static const char start[3] = { '1','1','2' };
     const char *parity;
     int i;
     char *d = dest + strlen(dest);
@@ -343,7 +350,7 @@ static void ean_add_on(const unsigned char source[], const int length, char dest
     }
 
     /* Start character */
-    memcpy(d, "112", 3);
+    memcpy(d, start, 3);
     d += 3;
 
     /* Calculate parity */
@@ -381,7 +388,7 @@ static void ean_add_on(const unsigned char source[], const int length, char dest
 
         /* Glyph separator */
         if (i != (length - 1)) {
-            memcpy(d, "11", 2);
+            memcpy(d, EANones, 2);
             d += 2;
         }
     }
@@ -422,13 +429,13 @@ static int ean13_cc(struct zint_symbol *symbol, const unsigned char source[], in
     half_way = 7;
 
     /* Start character */
-    memcpy(d, "111", 3);
+    memcpy(d, EANones, 3);
     d += 3;
 
     for (i = 1; i < symbol->text_length; i++, d += 4) {
         if (i == half_way) {
             /* Middle character - separates manufacturer no. from product no. - also inverts right hand characters */
-            memcpy(d, "11111", 5);
+            memcpy(d, EANones, 5);
             d += 5;
         }
 
@@ -440,7 +447,9 @@ static int ean13_cc(struct zint_symbol *symbol, const unsigned char source[], in
     }
 
     /* Stop character */
-    memcpy(d, "111", 4); /* Include terminating NUL */
+    memcpy(d, EANones, 3);
+    d += 3;
+    *d = '\0'; /* Need to NUL-terminate */
 
     if (symbol->output_options & COMPLIANT_HEIGHT) {
         /* ISO/IEC 15420:2009 4.3.3 Bar height EAN-13 22.85mm / 0.33mm (X) ~ 69.24,
@@ -550,9 +559,7 @@ static int isbnx(struct zint_symbol *symbol, unsigned char source[], const int l
     char check_digit;
 
     z_to_upper(source, length);
-    if (z_not_sane(ISBNX_SANE_F, source, length)) { /* As source has been zero-padded, don't report position */
-        return z_errtxt(ZINT_ERROR_INVALID_DATA, symbol, 277, "Invalid character in input (digits and \"X\" only)");
-    }
+    assert(!z_not_sane(ISBNX_SANE_F, source, length)); /* Prior checks ensure this */
 
     /* Input must be 9, 10 or 13 characters */
     if (length != 9 && length != 10 && length != 13) {
@@ -933,6 +940,9 @@ INTERNAL int zint_eanx_cc(struct zint_symbol *symbol, unsigned char source[], in
         case BARCODE_EANX:
         case BARCODE_EANX_CHK:
         case BARCODE_EAN13:
+            /* Checks in `zint_ean_leading_zeroes()` ensure following */
+            assert(first_part_len == 2 || first_part_len == 5 || first_part_len == 7 || first_part_len == 8
+                    || first_part_len == 12 || first_part_len == 13);
             switch (first_part_len) {
                 case 2:
                 case 5:
@@ -954,18 +964,15 @@ INTERNAL int zint_eanx_cc(struct zint_symbol *symbol, unsigned char source[], in
                 case 13:
                     error_number = ean13(symbol, first_part, first_part_len, dest);
                     break;
-                default:
-                    assert(symbol->symbology == BARCODE_EANX || symbol->symbology == BARCODE_EANX_CHK);
-                    return z_errtxtf(ZINT_ERROR_TOO_LONG, symbol, 286,
-                                    "Input length %d wrong (2, 5, 7, 8, 12 or 13 characters required)",
-                                    first_part_len);
-                    break;
             }
             break;
         case BARCODE_EANX_CC:
         case BARCODE_EAN8_CC:
         case BARCODE_EAN13_CC:
-            switch (first_part_len) { /* Adds vertical separator bars according to ISO/IEC 24723 section 11.4 */
+            /* Checks in `zint_ean_leading_zeroes()` ensure following */
+            assert(first_part_len == 7 || first_part_len == 8 || first_part_len == 12 || first_part_len == 13);
+            switch (first_part_len) {
+                /* Adds vertical separator bars according to ISO/IEC 24723 section 11.4 */
                 case 7:
                 case 8:
                     z_set_module(symbol, symbol->rows, 1);
@@ -993,11 +1000,6 @@ INTERNAL int zint_eanx_cc(struct zint_symbol *symbol, unsigned char source[], in
                     symbol->row_height[symbol->rows + 2] = 2;
                     symbol->rows += 3;
                     error_number = ean13_cc(symbol, first_part, first_part_len, dest, cc_rows);
-                    break;
-                default:
-                    assert(symbol->symbology == BARCODE_EANX_CC);
-                    return z_errtxtf(ZINT_ERROR_TOO_LONG, symbol, 287,
-                                    "Input length %d wrong (7, 12 or 13 characters required)", first_part_len);
                     break;
             }
             break;

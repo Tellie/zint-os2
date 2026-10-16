@@ -10,7 +10,7 @@
 ;******************************************************************************
 !define PRODUCT_NAME "Zint"
 !define PRODUCT_EXE "qtZint.exe"
-!define PRODUCT_VERSION "2.16.0"
+!define PRODUCT_VERSION "2.16.0.9"
 !define PRODUCT_WEB_SITE "http://www.zint.org.uk"
 !define PRODUCT_PUBLISHER "Robin Stuart & BogDan Vatra"
 !define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\${PRODUCT_EXE}"
@@ -58,7 +58,7 @@ Var ICONS_GROUP
 ; Welcome page
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "gpl-3.0.txt"
-; Mixed mode instalation page
+; Mixed mode installation page
 !insertmacro MULTIUSER_PAGE_INSTALLMODE
 ; Components page
 ; !insertmacro MUI_PAGE_COMPONENTS

@@ -1,6 +1,6 @@
 /***************************************************************************
  *   Copyright (C) 2008 by BogDan Vatra <bogdan@licentia.eu>               *
- *   Copyright (C) 2009-2024 by Robin Stuart <rstuart114@gmail.com>        *
+ *   Copyright (C) 2009-2026 by Robin Stuart <rstuart114@gmail.com>        *
  *                                                                         *
  *   This program is free software: you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -24,10 +24,11 @@
 #include <QGraphicsScene>
 #include <QSettings>
 
-class QLabel;
-class QShortcut;
 class QDoubleSpinBox;
 class QPushButton;
+class QRadioButton;
+class QShortcut;
+class QSpinBox;
 class QToolButton;
 
 #include "ui_mainWindow.h"
@@ -75,6 +76,9 @@ public slots:
     void upcean_no_quiet_zones_ui_set();
     void upcae_no_quiet_zones_ui_set();
     void eanaddon_no_quiet_zones_ui_set();
+    void aztec_size_index_changed();
+    void aztec_ecc_index_changed();
+    void dm_startmode_ui_set();
     void structapp_ui_set();
     void clear_text_gap();
     void on_encoded();
@@ -175,6 +179,16 @@ protected:
 
     QWidget *get_widget(const QString &name);
 
+    QPushButton *get_btn(const QString &name);
+    QCheckBox *get_chk(const QString &name);
+    QComboBox *get_cmb(const QString &name);
+    QGroupBox *get_groupBox(const QString &name);
+    QLabel *get_lbl(const QString &name);
+    QRadioButton *get_rad(const QString &name);
+    QDoubleSpinBox *get_dspn(const QString &name);
+    QSpinBox *get_spn(const QString &name);
+    QLineEdit *get_txt(const QString &name);
+
     static QString get_setting_name(int symbology);
 
     int get_rad_grp_index(const QStringList &names);
@@ -183,6 +197,7 @@ protected:
     bool get_rad_val(const QString &name);
 
     int get_cmb_index(const QString &name);
+    void set_cmb_index(const QString &name, const int index);
     void set_cmb_from_setting(QSettings &settings, const QString &setting, const QString &name, int default_val = 0);
 
     int get_chk_val(const QString &name);
@@ -215,6 +230,8 @@ private:
     QWidget *m_optionWidget;
     QGraphicsScene *scene;
     int m_symbology;
+    int m_aztecSizeIndex;
+    int m_aztecECCIndex;
     QMenu *m_menu;
     QShortcut *m_saveAsShortcut;
     QShortcut *m_factoryResetShortcut;

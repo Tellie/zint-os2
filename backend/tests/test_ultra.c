@@ -1,6 +1,6 @@
 /*
     libzint - the open source barcode library
-    Copyright (C) 2020-2025 Robin Stuart <rstuart114@gmail.com>
+    Copyright (C) 2020-2026 Robin Stuart <rstuart114@gmail.com>
 
     Redistribution and use in source and binary forms, with or without
     modification, are permitted provided that the following conditions
@@ -278,6 +278,7 @@ static void test_input(const testCtx *const p_ctx) {
         /* 73*/ { UNICODE_MODE, 0, 4, -1, -1, { 0, 0, "" }, "A", 0, "(16) 257 4 157 71 251 225 57 250 69 40 82 13 283 6 65 9", 4, "" },
         /* 74*/ { UNICODE_MODE, 0, 5, -1, -1, { 0, 0, "" }, "A", 0, "(18) 257 4 90 195 35 197 81 56 120 116 278 62 217 15 283 8 65 11", 5, "" },
         /* 75*/ { UNICODE_MODE, 0, 6, -1, -1, { 0, 0, "" }, "A", 0, "(20) 257 4 255 264 113 138 228 183 42 193 225 1 248 147 100 17 283 10 65 13", 6, "" },
+        /* 76*/ { UNICODE_MODE, 0, -1, -1, -1, { 0, 0, "" }, "http://", 0, "(14) 281 3 86 22 138 32 163 153 243 10 283 4 284 7", 3, "" },
     };
     const int data_size = ARRAY_SIZE(data);
     int i, length, ret;
@@ -804,13 +805,28 @@ static void test_encode(const testCtx *const p_ctx) {
                     "785786166533113663683357"
                     "777777777777777777777777"
                 },
+        /* 24*/ { UNICODE_MODE, 0, -1, -1, -1, { 0, 0, "" }, "http://", 0, 13, 13, 0, "BWIPP: doesn't use fragments",
+                    "7777777777777"
+                    "7857863356557"
+                    "7717851613617"
+                    "7867866561557"
+                    "7757851656617"
+                    "7837815365557"
+                    "7787878787877"
+                    "7867811151117"
+                    "7717833513337"
+                    "7857816355157"
+                    "7737855563617"
+                    "7817863115357"
+                    "7777777777777"
+                },
     };
     const int data_size = ARRAY_SIZE(data);
     int i, length, ret;
     struct zint_symbol *symbol = NULL;
 
     char escaped[1024];
-    char bwipp_buf[32768];
+    char bwipp_buf[32768] ZINT_TESTUTIL_SANITIZEM_INIT;
     char bwipp_msg[1024];
 
     int do_bwipp = (debug & ZINT_DEBUG_TEST_BWIPP) && testUtilHaveGhostscript(); /* Only do BWIPP test if asked, too slow otherwise */

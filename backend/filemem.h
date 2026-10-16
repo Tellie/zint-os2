@@ -1,7 +1,7 @@
 /*  filemem.h - write to file/memory abstraction */
 /*
     libzint - the open source barcode library
-    Copyright (C) 2023-2025 Robin Stuart <rstuart114@gmail.com>
+    Copyright (C) 2023-2026 Robin Stuart <rstuart114@gmail.com>
 
     Redistribution and use in source and binary forms, with or without
     modification, are permitted provided that the following conditions
@@ -40,11 +40,6 @@ extern "C" {
 #include <stdio.h>
 #include "common.h"
 
-/* Whether `vsnprintf()` available */
-#if (defined(_MSC_VER) && _MSC_VER < 1900) || defined(ZINT_IS_C89) /* Pre-MSVC 2015 (C++ 14.0) or C89 */
-#define FM_NO_VSNPRINTF
-#endif
-
 struct filemem {
     FILE *fp;
     unsigned char *mem;
@@ -53,7 +48,7 @@ struct filemem {
     size_t memend;      /* For use by `zint_fm_seek()`, points to highest `mempos` reached */
     int flags;          /* BARCODE_MEMORY_FILE or BARCODE_STDOUT */
     int err;            /* `errno` values, reset only on `zint_fm_open()` */
-#ifdef FM_NO_VSNPRINTF
+#ifdef Z_NO_VSNPRINTF
     FILE *fp_null;      /* Only used for BARCODE_MEMORY_FILE */
 #endif
 };
@@ -94,6 +89,25 @@ INTERNAL int zint_fm_error(struct filemem *restrict const fmp);
 /* `fflush()` if file, no-op if memory, returning 1 on success, 0 on failure
    NOTE: don't use, included only for libpng compatibility */
 INTERNAL int zint_fm_flush(struct filemem *restrict const fmp);
+
+#ifdef ZINT_TEST
+/* For testing `malloc()`/`realloc()` failures */
+#define FM_FAIL_ID_OPEN     1
+#define FM_FAIL_ID_WRITE    2
+#define FM_FAIL_ID_PUTC     3
+#define FM_FAIL_ID_PUTS     4
+#define FM_FAIL_ID_PRINTF   5
+#define FM_FAIL_ID_PUTSF    6
+#define FM_FAIL_ID_CLOSE    7
+#define FM_FAIL_ID_SEEK     8
+#define FM_FAIL_ID_TELL     9
+#define FM_FAIL_ID_FLUSH    10
+#define FM_FAIL_ID_MALLOC   11
+#define FM_FAIL_ID_REALLOC  12
+
+INTERNAL void zint_test_fm_set_fail(const int id, const int at);
+INTERNAL void zint_test_fm_set_alloc_fail(const int id, const int at);
+#endif
 
 #ifdef __cplusplus
 }

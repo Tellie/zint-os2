@@ -1,7 +1,7 @@
 /* pdf417.c - Handles PDF417 stacked symbology */
 /*
     libzint - the open source barcode library
-    Copyright (C) 2008-2025 Robin Stuart <rstuart114@gmail.com>
+    Copyright (C) 2008-2026 Robin Stuart <rstuart114@gmail.com>
     Portions Copyright (C) 2004 Grandzebu
     Bug Fixes thanks to KL Chin <klchin@users.sourceforge.net>
 
@@ -32,9 +32,16 @@
  */
 /* SPDX-License-Identifier: BSD-3-Clause */
 
+/*
+ *********************************************************************************************
+ * TODO: Replace all code adapted from "pdf417.frm" as it was released under GPL v2.0 or later
+ *********************************************************************************************
+ */
+
 /*  This code is adapted from "Code barre PDF 417 / PDF 417 barcode" v2.5.0
     which is Copyright (C) 2004 (Grandzebu).
     The original code (file pdf417.frm) can be downloaded from https://grandzebu.net/informatique/codbar/pdf417.zip */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /* NOTE: symbol->option_1 is used to specify the security level (i.e. control the
    number of check codewords)
@@ -137,10 +144,11 @@ static const char pdf_asciiy[127] = {
 };
 
 /* Automatic sizing table */
-
+/* Number of non-EC CWs from ISO/IEC 24728:2006 Table 1, arranged in ascending order (1st 28),
+   and matching variant (2nd 28) */
 static const char pdf_MicroAutosize[56] = {
-    4, 6, 7, 8, 10, 12, 13, 14, 16, 18, 19, 20, 24, 29, 30, 33, 34, 37, 39, 46, 54, 58, 70, 72, 82, 90, 108, 126,
-    1, 14, 2, 7, 3, 25, 8, 16, 5, 17, 9, 6, 10, 11, 28, 12, 19, 13, 29, 20, 30, 21, 22, 31, 23, 32, 33, 34
+    4,  6, 7, 8, 10, 12, 13, 14, 16, 18, 19, 20, 24, 29, 30, 33, 34, 37, 39, 46, 54, 58, 70, 72, 82, 90, 108, 126,
+    1, 14, 2, 7,  3, 25,  8, 16,  5, 17,  9,  6, 10, 11, 28, 12, 19, 13, 29, 20, 30, 21, 22, 31, 23, 32,  33,  34
 };
 
 /* ISO/IEC 15438:2015 5.1.1 c) 3) Max possible number of characters at error correction level 0
@@ -500,7 +508,6 @@ static void pdf_textprocess(short *chainemc, int *p_mclength, const unsigned cha
         }
     }
 
-    /* 663 */
     *p_curtable = curtable;
     pdf_textprocess_end(chainemc, p_mclength, is_last_seg, chainet, wnet, p_curtable, p_tex_padded);
 }
@@ -932,6 +939,8 @@ static int pdf_define_modes(short liste[3][PDF_MAX_LEN], int *p_indexliste, cons
     if (!edges) {
         return 0;
     }
+    assert((length + 1) * PDF_NUM_MODES < USHRT_MAX); /* Guaranteed by input length limit */
+
     pdf_addEdges(source, length, lastmode, edges, 0, NULL);
 
     PDF_TRACE_Edges("DEBUG Initial situation\n", source, length, edges, 0);
@@ -1355,17 +1364,9 @@ static int pdf_enc(struct zint_symbol *symbol, struct zint_seg segs[], const int
     chainemc[0] = mclength;
 
     /* 796 - we now take care of the Reed Solomon codes */
-    switch (ecc) {
-        case 1: offset = 2; break;
-        case 2: offset = 6; break;
-        case 3: offset = 14; break;
-        case 4: offset = 30; break;
-        case 5: offset = 62; break;
-        case 6: offset = 126; break;
-        case 7: offset = 254; break;
-        case 8: offset = 510; break;
-        default: offset = 0; break;
-    }
+    assert(ecc >= 0 && ecc <= 8);
+    offset = (2 << ecc) - 2;
+    assert(offset >= 0 && offset <= 512); /* Suppress clang-tidy-23 warning clang-analyzer-security.ArrayBound */
 
     for (i = 0; i < mclength; i++) {
         total = (chainemc[i] + mccorrection[ecc_cws - 1]) % 929;
@@ -1430,13 +1431,11 @@ static int pdf_enc(struct zint_symbol *symbol, struct zint_seg segs[], const int
         bp = z_bin_append_posn(0x1FEA8, 17, pattern, bp); /* Row start */
 
         for (j = 0; j <= cols; j++) {
-            bp = z_bin_append_posn(zint_pdf_bitpattern[offset + dummy[j]], 16, pattern, bp);
-            pattern[bp++] = '0';
+            bp = z_bin_append_posn(((int) zint_pdf_bitpattern[offset + dummy[j]]) << 1, 17, pattern, bp);
         }
 
         if (symbol->symbology != BARCODE_PDF417COMP) {
-            bp = z_bin_append_posn(zint_pdf_bitpattern[offset + dummy[j]], 16, pattern, bp);
-            pattern[bp++] = '0';
+            bp = z_bin_append_posn(((int) zint_pdf_bitpattern[offset + dummy[j]]) << 1, 17, pattern, bp);
             bp = z_bin_append_posn(0x3FA29, 18, pattern, bp); /* Row Stop */
         } else {
             pattern[bp++] = '1'; /* Compact PDF417 Stop pattern */
@@ -1470,7 +1469,7 @@ INTERNAL int zint_pdf417(struct zint_symbol *symbol, struct zint_seg segs[], con
 
     if (symbol->option_1 < -1 || symbol->option_1 > 8) {
         z_errtxtf(0, symbol, 460, "Error correction level '%d' out of range (0 to 8)", symbol->option_1);
-        if (symbol->warn_level == WARN_FAIL_ALL) {
+        if ((symbol->warn_level & 0xFF) == WARN_FAIL_ALL) {
             return ZINT_ERROR_INVALID_OPTION;
         }
         error_number = z_errtxt_adj(ZINT_WARN_INVALID_OPTION, symbol, "%1$s%2$s", ", ignoring");
@@ -1478,7 +1477,7 @@ INTERNAL int zint_pdf417(struct zint_symbol *symbol, struct zint_seg segs[], con
     }
     if (symbol->option_2 < 0 || symbol->option_2 > 30) {
         z_errtxtf(0, symbol, 461, "Number of columns '%d' out of range (1 to 30)", symbol->option_2);
-        if (symbol->warn_level == WARN_FAIL_ALL) {
+        if ((symbol->warn_level & 0xFF) == WARN_FAIL_ALL) {
             return ZINT_ERROR_INVALID_OPTION;
         }
         error_number = z_errtxt_adj(ZINT_WARN_INVALID_OPTION, symbol, "%1$s%2$s", ", ignoring");
@@ -1505,207 +1504,105 @@ INTERNAL int zint_pdf417(struct zint_symbol *symbol, struct zint_seg segs[], con
     return error_number;
 }
 
-/* Like PDF417 only much smaller! */
-INTERNAL int zint_micropdf417(struct zint_symbol *symbol, struct zint_seg segs[], const int seg_count) {
-    int i, k, j, longueur, mccorrection[50] = {0}, offset;
-    int ecc_cwds;
-    int total, mclength, error_number = 0;
-    short chainemc[PDF_MAX_STREAM_LEN];
-    char pattern[580];
-    int bp = 0;
-    int structapp_cws[18] = {0}; /* 3 (Index) + 10 (ID) + 4 (Count) + 1 (Last) */
-    int structapp_cp = 0;
-    int variant;
-    int LeftRAP, CentreRAP, RightRAP, Cluster, loop;
-    const int debug_print = symbol->debug & ZINT_DEBUG_PRINT;
-    /* From ISO/IEC 24728:2006 Table 1 — MicroPDF417 version characteristics */
-    static char col_max_codewords[5] = { 0, 20, 37, 82, 126 };
-
-    if ((i = z_segs_length(segs, seg_count)) > MICRO_PDF_MAX_LEN) {
-        return z_errtxtf(ZINT_ERROR_TOO_LONG, symbol, 474,
-                        "Input length %d too long (maximum " MICRO_PDF_MAX_LEN_S ")", i);
-    }
-    if (symbol->option_3) {
-        return z_errtxt(ZINT_ERROR_INVALID_OPTION, symbol, 476, "Cannot specify rows for MicroPDF417");
-    }
-
-    /* Encoding starts out the same as PDF417, so use the same code */
-
-    if ((error_number = pdf_initial_segs(symbol, segs, seg_count, 1 /*is_micro*/, chainemc, &mclength, structapp_cws,
-                                        &structapp_cp))) {
-        assert(error_number >= ZINT_ERROR);
-        return error_number;
-    }
-
-    /* This is where it all changes! */
-
-    if (mclength + structapp_cp > 126) {
-        return z_errtxtf(ZINT_ERROR_TOO_LONG, symbol, 467, "Input too long, requires %d codewords (maximum 126)",
-                        mclength + structapp_cp);
-    }
-    if (symbol->option_2 > 4) {
-        if (symbol->warn_level == WARN_FAIL_ALL) {
-            return z_errtxtf(ZINT_ERROR_INVALID_OPTION, symbol, 471, "Number of columns '%d' out of range (1 to 4)",
-                            symbol->option_2);
-        }
-        error_number = z_errtxtf(ZINT_WARN_INVALID_OPTION, symbol, 468,
-                                "Number of columns '%d' out of range (1 to 4), ignoring", symbol->option_2);
-        symbol->option_2 = 0;
-    }
-
-    if (debug_print) {
-        printf("\nEncoded Data Stream (%d):\n", mclength);
-        for (i = 0; i < mclength; i++) {
-            printf("%3d ", chainemc[i]);
-        }
-        fputc('\n', stdout);
-    }
-
-    /* Now figure out which variant of the symbol to use and load values accordingly */
-
-    variant = 0;
-
-    if (symbol->option_2 >= 1 && mclength + structapp_cp > col_max_codewords[symbol->option_2]) {
-        /* The user specified the column but the data doesn't fit - go to automatic */
-        if (symbol->warn_level == WARN_FAIL_ALL) {
-            return ZEXT z_errtxtf(ZINT_ERROR_INVALID_OPTION, symbol, 469,
-                                "Input too long for number of columns '%1$d', requires %2$d codewords (maximum %3$d)",
-                                symbol->option_2, mclength + structapp_cp, col_max_codewords[symbol->option_2]);
-        }
-        error_number = z_errtxtf(ZINT_WARN_INVALID_OPTION, symbol, 470,
-                                "Input too long for number of columns '%d', ignoring", symbol->option_2);
-        symbol->option_2 = 0;
-    }
-
-    if (symbol->option_2 == 1) {
-        /* The user specified 1 column and the data does fit */
-        if (mclength + structapp_cp <= 4) {
+/* Return variant based on `cols` and codeword length `mclength`. Returns 0 if `cols` 0 or no variant fits */
+INTERNAL int zint_micropdf_variant(const int cols, const int mclength) {
+    int variant = 0;
+    if (cols == 1) {
+        if (mclength <= 4) {
             variant = 1;
-        } else if (mclength + structapp_cp <= 7) {
+        } else if (mclength <= 7) {
             variant = 2;
-        } else if (mclength + structapp_cp <= 10) {
+        } else if (mclength <= 10) {
             variant = 3;
-        } else if (mclength + structapp_cp <= 12) {
+        } else if (mclength <= 12) {
             variant = 4;
-        } else if (mclength + structapp_cp <= 16) {
+        } else if (mclength <= 16) {
             variant = 5;
         } else {
             variant = 6;
         }
-    } else if (symbol->option_2 == 2) {
-        /* The user specified 2 columns and the data does fit */
-        if (mclength + structapp_cp <= 8) {
+    } else if (cols == 2) {
+        if (mclength <= 8) {
             variant = 7;
-        } else if (mclength + structapp_cp <= 13) {
+        } else if (mclength <= 13) {
             variant = 8;
-        } else if (mclength + structapp_cp <= 19) {
+        } else if (mclength <= 19) {
             variant = 9;
-        } else if (mclength + structapp_cp <= 24) {
+        } else if (mclength <= 24) {
             variant = 10;
-        } else if (mclength + structapp_cp <= 29) {
+        } else if (mclength <= 29) {
             variant = 11;
-        } else if (mclength + structapp_cp <= 33) {
+        } else if (mclength <= 33) {
             variant = 12;
         } else {
             variant = 13;
         }
-    } else if (symbol->option_2 == 3) {
-        /* The user specified 3 columns and the data does fit */
-        if (mclength + structapp_cp <= 6) {
+    } else if (cols == 3) {
+        if (mclength <= 6) {
             variant = 14;
-        } else if (mclength + structapp_cp <= 10) {
+        } else if (mclength <= 10) {
             variant = 15;
-        } else if (mclength + structapp_cp <= 14) {
+        } else if (mclength <= 14) {
             variant = 16;
-        } else if (mclength + structapp_cp <= 18) {
+        } else if (mclength <= 18) {
             variant = 17;
-        } else if (mclength + structapp_cp <= 24) {
+        } else if (mclength <= 24) {
             variant = 18;
-        } else if (mclength + structapp_cp <= 34) {
+        } else if (mclength <= 34) {
             variant = 19;
-        } else if (mclength + structapp_cp <= 46) {
+        } else if (mclength <= 46) {
             variant = 20;
-        } else if (mclength + structapp_cp <= 58) {
+        } else if (mclength <= 58) {
             variant = 21;
-        } else if (mclength + structapp_cp <= 70) {
+        } else if (mclength <= 70) {
             variant = 22;
         } else {
             variant = 23;
         }
-    } else if (symbol->option_2 == 4) {
-        /* The user specified 4 columns and the data does fit */
-        if (mclength + structapp_cp <= 8) {
+    } else if (cols == 4) {
+        if (mclength <= 8) {
             variant = 24;
-        } else if (mclength + structapp_cp <= 12) {
+        } else if (mclength <= 12) {
             variant = 25;
-        } else if (mclength + structapp_cp <= 18) {
+        } else if (mclength <= 18) {
             variant = 26;
-        } else if (mclength + structapp_cp <= 24) {
+        } else if (mclength <= 24) {
             variant = 27;
-        } else if (mclength + structapp_cp <= 30) {
+        } else if (mclength <= 30) {
             variant = 28;
-        } else if (mclength + structapp_cp <= 39) {
+        } else if (mclength <= 39) {
             variant = 29;
-        } else if (mclength + structapp_cp <= 54) {
+        } else if (mclength <= 54) {
             variant = 30;
-        } else if (mclength + structapp_cp <= 72) {
+        } else if (mclength <= 72) {
             variant = 31;
-        } else if (mclength + structapp_cp <= 90) {
+        } else if (mclength <= 90) {
             variant = 32;
-        } else if (mclength + structapp_cp <= 108) {
+        } else if (mclength <= 108) {
             variant = 33;
         } else {
             variant = 34;
         }
-    } else {
-        /* Zint can choose automatically from all available variations */
-        for (i = 27; i >= 0; i--) {
-            /* Note mclength + structapp_cp <= 126 and pdf_MicroAutosize[27] == 126 so variant will be set */
-            if (pdf_MicroAutosize[i] >= mclength + structapp_cp) {
-                variant = pdf_MicroAutosize[i + 28];
-            } else {
-                break;
-            }
-        }
     }
-    assert(variant > 0); /* Suppress clang-tidy clang-analyzer-core.uninitialized.Assign */
+    return variant;
+}
 
-    /* Now we have the variant we can load the data */
-    variant--;
-    symbol->option_2 = zint_pdf_MicroVariants[variant]; /* Columns */
-    symbol->rows = zint_pdf_MicroVariants[variant + 34]; /* Rows */
-    ecc_cwds = zint_pdf_MicroVariants[variant + 68]; /* Number of EC CWs */
-    longueur = (symbol->option_2 * symbol->rows) - ecc_cwds; /* Number of non-EC CWs */
-    i = longueur - (mclength + structapp_cp); /* Amount of padding required */
-    offset = zint_pdf_MicroVariants[variant + 102]; /* Coefficient offset */
-
-    /* Feedback options */
-    /* Place in top byte, leaving bottom one for maybe future use - also compatible with AZTEC */
-    symbol->option_1 = ((int) z_stripf(roundf(z_stripf(ecc_cwds * 100.0f / (longueur + ecc_cwds))))) << 8;
-
-    if (debug_print) {
-        fputs("\nChoose symbol size:\n", stdout);
-        printf("%d columns x %d rows, variant %d\n", symbol->option_2, symbol->rows, variant + 1);
-        printf("%d data codewords (including %d pads), %d ecc codewords\n", longueur, i, ecc_cwds);
-        fputc('\n', stdout);
-    }
-
-    /* We add the padding */
-    while (i-- > 0) {
-        chainemc[mclength++] = 900;
-    }
-
-    /* We add the Structured Append Macro Control Block if any */
-    if (structapp_cp) {
-        for (i = 0; i < structapp_cp; i++) {
-            chainemc[mclength++] = structapp_cws[i];
-        }
-    }
+INTERNAL void zint_micropdf_expand(struct zint_symbol *symbol, short *chainemc, int mclength, char *pattern,
+                const int cols, const int variant, const int debug_print) {
+    int bp = 0; /* Suppress gcc warning -Wmaybe-uninitialized */
+    int i, k, j, mccorrection[50] = {0}, ecc_cwds;
+    int offset = zint_pdf_MicroVariants[3][variant]; /* Coefficient offset */
+    int LeftRAP = zint_pdf_RAPTable[0][variant] - 1;
+    int CentreRAP = zint_pdf_RAPTable[1][variant] - 1;
+    int RightRAP = zint_pdf_RAPTable[2][variant] - 1;
+    int Cluster;
 
     /* Reed-Solomon error correction */
-    longueur = mclength;
-    for (i = 0; i < longueur; i++) {
-        total = (chainemc[i] + mccorrection[ecc_cwds - 1]) % 929;
+    ecc_cwds = zint_pdf_MicroVariants[2][variant]; /* Number of EC CWs */
+    assert(ecc_cwds >= 7); /* Suppress clang-tidy-23 warning clang-analyzer-security.ArrayBound */
+
+    for (i = 0; i < mclength; i++) {
+        const int total = (chainemc[i] + mccorrection[ecc_cwds - 1]) % 929;
         for (j = ecc_cwds - 1; j >= 0; j--) {
             if (j == 0) {
                 mccorrection[j] = (929 - (total * zint_pdf_Microcoeffs[offset + j]) % 929) % 929;
@@ -1739,15 +1636,10 @@ INTERNAL int zint_micropdf417(struct zint_symbol *symbol, struct zint_seg segs[]
     }
 #endif
 
-    /* Now get the RAP (Row Address Pattern) start values */
-    LeftRAP = zint_pdf_RAPTable[variant];
-    CentreRAP = zint_pdf_RAPTable[variant + 34];
-    RightRAP = zint_pdf_RAPTable[variant + 68];
-    Cluster = zint_pdf_RAPTable[variant + 102] / 3;
+    /* Cluster can be 0, 1 or 2 for Cluster(0), Cluster(3) and Cluster(6) */
+    Cluster = zint_pdf_RAPTable[3][variant]; /* Pre-divided by 3 */
 
     /* That's all values loaded, get on with the encoding */
-
-    /* Cluster can be 0, 1 or 2 for Cluster(0), Cluster(3) and Cluster(6) */
 
     if (debug_print) fputs("\nInternal row representation:\n", stdout);
 
@@ -1755,61 +1647,162 @@ INTERNAL int zint_micropdf417(struct zint_symbol *symbol, struct zint_seg segs[]
         if (debug_print) printf("row %d: ", i);
         bp = 0;
         offset = 929 * Cluster;
-        k = i * symbol->option_2;
+        k = i * cols;
 
         /* Copy the data into codebarre */
-        bp = z_bin_append_posn(zint_pdf_rap_side[LeftRAP - 1], 10, pattern, bp);
-        bp = z_bin_append_posn(zint_pdf_bitpattern[offset + chainemc[k]], 16, pattern, bp);
-        pattern[bp++] = '0';
-        if (symbol->option_2 >= 2) {
-            if (symbol->option_2 == 3) {
-                bp = z_bin_append_posn(zint_pdf_rap_centre[CentreRAP - 1], 10, pattern, bp);
+        bp = z_bin_append_posn(zint_pdf_rap_side[LeftRAP], 10, pattern, bp);
+        bp = z_bin_append_posn(((int) zint_pdf_bitpattern[offset + chainemc[k]]) << 1, 17, pattern, bp);
+        if (cols >= 2) {
+            if (cols == 3) {
+                bp = z_bin_append_posn(zint_pdf_rap_centre[CentreRAP], 10, pattern, bp);
             }
-            bp = z_bin_append_posn(zint_pdf_bitpattern[offset + chainemc[k + 1]], 16, pattern, bp);
-            pattern[bp++] = '0';
-            if (symbol->option_2 >= 3) {
-                if (symbol->option_2 == 4) {
-                    bp = z_bin_append_posn(zint_pdf_rap_centre[CentreRAP - 1], 10, pattern, bp);
+            bp = z_bin_append_posn(((int) zint_pdf_bitpattern[offset + chainemc[k + 1]]) << 1, 17, pattern, bp);
+            if (cols >= 3) {
+                if (cols == 4) {
+                    bp = z_bin_append_posn(zint_pdf_rap_centre[CentreRAP], 10, pattern, bp);
                 }
-                bp = z_bin_append_posn(zint_pdf_bitpattern[offset + chainemc[k + 2]], 16, pattern, bp);
-                pattern[bp++] = '0';
-                if (symbol->option_2 == 4) {
-                    bp = z_bin_append_posn(zint_pdf_bitpattern[offset + chainemc[k + 3]], 16, pattern, bp);
-                    pattern[bp++] = '0';
+                bp = z_bin_append_posn(((int) zint_pdf_bitpattern[offset + chainemc[k + 2]]) << 1, 17, pattern, bp);
+                if (cols == 4) {
+                    bp = z_bin_append_posn(((int) zint_pdf_bitpattern[offset + chainemc[k + 3]]) << 1, 17, pattern,
+                                            bp);
                 }
             }
         }
-        bp = z_bin_append_posn(zint_pdf_rap_side[RightRAP - 1], 10, pattern, bp);
+        bp = z_bin_append_posn(zint_pdf_rap_side[RightRAP], 10, pattern, bp);
         pattern[bp++] = '1'; /* Stop */
         if (debug_print) printf("%.*s\n", bp, pattern);
 
         /* So now pattern[] holds the string of '1's and '0's. - copy this to the symbol */
-        for (loop = 0; loop < bp; loop++) {
-            if (pattern[loop] == '1') {
-                z_set_module(symbol, i, loop);
+        for (j = 0; j < bp; j++) {
+            if (pattern[j] == '1') {
+                z_set_module(symbol, i, j);
             }
         }
 
         /* Set up RAPs and Cluster for next row */
-        LeftRAP++;
-        CentreRAP++;
-        RightRAP++;
-        Cluster++;
-
-        if (LeftRAP == 53) {
-            LeftRAP = 1;
-        }
-        if (CentreRAP == 53) {
-            CentreRAP = 1;
-        }
-        if (RightRAP == 53) {
-            RightRAP = 1;
-        }
-        if (Cluster == 3) {
-            Cluster = 0;
-        }
+        LeftRAP = LeftRAP == 51 ? 0 : LeftRAP + 1;
+        CentreRAP = CentreRAP == 51 ? 0 : CentreRAP + 1;
+        RightRAP = RightRAP == 51 ? 0 : RightRAP + 1;
+        Cluster = Cluster == 2 ? 0 : Cluster + 1;
     }
     symbol->width = bp;
+}
+
+/* Like PDF417 only much smaller! */
+INTERNAL int zint_micropdf417(struct zint_symbol *symbol, struct zint_seg segs[], const int seg_count) {
+    int i, longueur, padding;
+    int ecc_cwds;
+    int mclength, error_number = 0;
+    short chainemc[PDF_MAX_STREAM_LEN];
+    char pattern[580];
+    int structapp_cws[18] = {0}; /* 3 (Index) + 10 (ID) + 4 (Count) + 1 (Last) */
+    int structapp_cp = 0;
+    int variant;
+    const int debug_print = symbol->debug & ZINT_DEBUG_PRINT;
+    /* From ISO/IEC 24728:2006 Table 1 — MicroPDF417 version characteristics */
+    static char col_max_codewords[5] = { 0, 20, 37, 82, 126 };
+
+    if ((i = z_segs_length(segs, seg_count)) > MICRO_PDF_MAX_LEN) {
+        return z_errtxtf(ZINT_ERROR_TOO_LONG, symbol, 474,
+                        "Input length %d too long (maximum " MICRO_PDF_MAX_LEN_S ")", i);
+    }
+    if (symbol->option_3) {
+        return z_errtxt(ZINT_ERROR_INVALID_OPTION, symbol, 476, "Cannot specify rows for MicroPDF417");
+    }
+
+    /* Encoding starts out the same as PDF417, so use the same code */
+
+    if ((error_number = pdf_initial_segs(symbol, segs, seg_count, 1 /*is_micro*/, chainemc, &mclength, structapp_cws,
+                                        &structapp_cp))) {
+        assert(error_number >= ZINT_ERROR);
+        return error_number;
+    }
+
+    /* This is where it all changes! */
+
+    if (mclength + structapp_cp > 126) {
+        return z_errtxtf(ZINT_ERROR_TOO_LONG, symbol, 467, "Input too long, requires %d codewords (maximum 126)",
+                        mclength + structapp_cp);
+    }
+    if (symbol->option_2 > 4) {
+        if ((symbol->warn_level & 0xFF) == WARN_FAIL_ALL) {
+            return z_errtxtf(ZINT_ERROR_INVALID_OPTION, symbol, 471, "Number of columns '%d' out of range (1 to 4)",
+                            symbol->option_2);
+        }
+        error_number = z_errtxtf(ZINT_WARN_INVALID_OPTION, symbol, 468,
+                                "Number of columns '%d' out of range (1 to 4), ignoring", symbol->option_2);
+        symbol->option_2 = 0;
+    }
+
+    if (debug_print) {
+        printf("\nEncoded Data Stream (%d):\n", mclength);
+        for (i = 0; i < mclength; i++) {
+            printf("%3d ", chainemc[i]);
+        }
+        fputc('\n', stdout);
+    }
+
+    /* Now figure out which variant of the symbol to use and load values accordingly */
+
+    if (symbol->option_2 >= 1 && mclength + structapp_cp > col_max_codewords[symbol->option_2]) {
+        /* The user specified the column but the data doesn't fit - go to automatic */
+        if ((symbol->warn_level & 0xFF) == WARN_FAIL_ALL) {
+            return ZEXT z_errtxtf(ZINT_ERROR_INVALID_OPTION, symbol, 469,
+                                "Input too long for number of columns '%1$d', requires %2$d codewords (maximum %3$d)",
+                                symbol->option_2, mclength + structapp_cp, col_max_codewords[symbol->option_2]);
+        }
+        error_number = z_errtxtf(ZINT_WARN_INVALID_OPTION, symbol, 470,
+                                "Input too long for number of columns '%d', ignoring", symbol->option_2);
+        symbol->option_2 = 0;
+    }
+
+    /* If the user didn't specify column or the data doesn't fit */
+    if (!(variant = zint_micropdf_variant(symbol->option_2, mclength + structapp_cp))) {
+        /* Zint can choose automatically from all available variations */
+        for (i = 27; i >= 0; i--) {
+            /* Note mclength + structapp_cp <= 126 and pdf_MicroAutosize[27] == 126 so variant will be set */
+            if (pdf_MicroAutosize[i] >= mclength + structapp_cp) {
+                variant = pdf_MicroAutosize[i + 28];
+            } else {
+                break;
+            }
+        }
+    }
+    assert(variant > 0); /* Suppress clang-tidy-23 warning clang-analyzer-core.uninitialized.Assign */
+
+    /* Now we have the variant we can load the data */
+    variant--;
+    symbol->option_2 = zint_pdf_MicroVariants[0][variant]; /* Columns */
+    symbol->rows = zint_pdf_MicroVariants[1][variant]; /* Rows */
+    ecc_cwds = zint_pdf_MicroVariants[2][variant]; /* Number of EC CWs */
+
+    longueur = (symbol->option_2 * symbol->rows) - ecc_cwds; /* Number of non-EC CWs */
+    padding = longueur - (mclength + structapp_cp); /* Amount of padding required */
+
+    /* Feedback options */
+    /* Place in top byte, leaving bottom one for maybe future use - also compatible with AZTEC */
+    symbol->option_1 = ((int) z_stripf(roundf(z_stripf(ecc_cwds * 100.0f / (longueur + ecc_cwds))))) << 8;
+
+    if (debug_print) {
+        fputs("\nChoose symbol size:\n", stdout);
+        printf("%d columns x %d rows, variant %d\n", symbol->option_2, symbol->rows, variant + 1);
+        printf("%d data codewords (including %d pads), %d ecc codewords\n", longueur, padding, ecc_cwds);
+        fputc('\n', stdout);
+    }
+
+    /* We add the padding */
+    while (padding-- > 0) {
+        chainemc[mclength++] = 900;
+    }
+
+    /* We add the Structured Append Macro Control Block if any */
+    if (structapp_cp) {
+        for (i = 0; i < structapp_cp; i++) {
+            chainemc[mclength++] = structapp_cws[i];
+        }
+    }
+
+    zint_micropdf_expand(symbol, chainemc, mclength, pattern, symbol->option_2, variant, debug_print);
 
     /* ISO/IEC 24728:2006 Section 5.8.2 2X minimum row height */
     if (error_number) {

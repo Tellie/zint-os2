@@ -1,3 +1,87 @@
+Version 2.16.0.9 (dev) not released yet (2026-10-09)
+====================================================
+
+**Incompatible changes**
+------------------------
+- Code 128 now errors on unrecognised extra escape sequences
+  (previously just passed them through)
+- Aztec error codeword percentages adjusted to be at least advertised values
+  (may cause symbol size change, and generation failure if specified)
+- Improved Aztec encodation algorithm (may cause symbol size change)
+- New Qt Backend method `save_as_memfile()` to save file to memory
+- New Qt Backend methods `gs1Raw()` and `setGS1Raw()` for new `GS1RAW_MODE`
+  option for processing GS1 input
+- New Qt Backend helper methods `setBorderTypeValue()`, `encodedInputMode()`,
+  `encodedOutputOptions()`, `ECIValueToECIIndex()` and `ECIIndexToECIValue()`
+- CLI now warns if both "--dmre" and "--square" are given
+  (previously silently ignored "--dmre")
+- New escape sequences `\L` (DLE), `\F` (FS), `\N` (US)
+
+Changes
+-------
+- backend_qt: add new method `save_as_memfile()` to save as
+  `BARCODE_MEMORY_FILE` and use in GUI for pasting to clipboard instead of
+  creating temporary file
+- CLI: allow "tiff" as filetype (saved as ".tif");
+  make args for "--scalexdimdp" and "--scmvv" optional;
+  make "--mirror" available in standard non-batch mode;
+  add `ZINT_TEST`-only "--test" option to do various internal tests
+- GS1SE: exclude GS1_128 from requisite AIs check as may be spread across more
+  than one barcode (ticket #348, props Harald Oehlmann and Terry Burton)
+- AZTEC: add improved encoding algorithm adapted from ZXing, props Frank Yellin
+  and Rustam Abdullaev; previous algorithm available via "--fast" (input_mode
+  |= FAST_MODE)
+- AZTEC: add new option "--azfull" (`option_3 = ZINT_AZTEC_FULL`) to only
+  consider Full symbols (not Compact ones) on automatic sizing
+- GS1: new `GS1RAW_MODE` (CLI "--gs1raw") and GS1 Syntax Engine "Unbracketed AI
+  element strings" (caret) options for specifying GS1 input (ticket #350, props
+  Mario Verbruggen)
+- DATAMATRIX: new options "--dmb256" (`option_3 = DM_B256_START`) & "--dmc40"
+  (`option_3 = DM_C40_START`) to allow forcing of initial encodation for given
+  no. (`option_1`) of initial characters, with 0 meaning all
+- AZTEC/DATAMATRIX: add manual FNC1 support
+- AUSPOST: support FCC 00 Null (DPID all zeroes) and allow variable length data
+  input
+- general: new escape sequences `\L` (DLE), `\F` (FS), `\N` (US)
+- TELEPEN/TELEPEN_NUM: support AIM-defined Start/Stop characters with option
+  "--vers=1" (API `option_2 = 1`)
+- TELEPEN_NUM: support switching to Full ASCII mode with DLE
+- TELEPEN: support switching to Compressed Numeric Mode with DLE if AIM enabled
+
+Bugs
+----
+- CODE128: fix not handling FNC1 at end of data when in manual switching mode
+  or any FNC1 after manual C mode selected and no other non-C data;
+  fix possible shifting before manual FNC1 in 2nd position after single alpha;
+  fix not removing manual FNC1 in 1st/2nd position from content segs
+- CLI: fix "--scalexdimdp" X-dim inch units being divided instead of multiplied
+  on conversion to mm
+- DOTCODE: fix not emitting FNC1 (signalling not GS1) if input is just 2 digits
+- CMake: set `rpath` of CLI/GUI on macOS install (ticket #346, props Hagen Röwer
+  and Bryce Harrison)
+- AZTEC: fix ECC to be at least advertised percentages (ticket #347, props
+  Francois Grieu)
+- CODE32/PZN: fix not restoring `option_2` (props axxel)
+- DBAR_EXP_CC/DBAR_EXPSTK_CC: fix separator over finder patterns when linear
+  part is greater than 4 codeblocks
+- raster/vector: allow for separator height being > twice row height (buffer
+  overflow for raster, zero/negative height rects for vector) (ticket #353,
+  props Simon Resch)
+- raster/vector: fix `BARCODE_BIND_TOP` trumping `BARCODE_BOX`
+- raster/vector: EAN/UPC: fix calculation of image/vector height to allow for
+  heights smaller than `textoffset` when have add-on (buffer overflow for
+  raster, outside vector height for vector)
+- ZBarcode_Encode_Segs: allow for multiple (stacked) rows when setting absolute
+  minimum height
+- CLI: stop looping over data args when have error
+- composite: preserve `gs1_verify()` warning (if any)
+- GRIDMATRIX: fix byte latch 6 -> 7, & allowing more than one non-digit in
+  numeral (both caused misencodation)
+- DOTCODE: fix not checking ECI on segs > 0 (MR #160, props Connor-Jay Dunn)
+- MAXICODE: do not span segments when counting digits/alphas even if no ECIs
+  as current logic can't handle it (ticket #361, props Zhiyuan He)
+
+
 Version 2.16.0 (2025-12-19)
 ===========================
 
@@ -166,7 +250,7 @@ Changes
   outside digit to be 4X/2X instead of 5X/3X away from main symbol so as not to
   touch add-on TODO: revisit when standard clarified
 - manual: make explicit that AI "(00)" and "(01)" prefixes added by Zint are
-  HRT-only; clarify Codablock-F length maximum & add examples
+  HRT-only; clarify Codablock F length maximum & add examples
 - add DXFILMEDGE (MR #159, props Antoine Mérino)
 
 Bugs
@@ -188,7 +272,7 @@ Bugs
 - library: need to check for valid UTF-8 after de-escaping
 - MAXICODE: maintain current set between segments
 - MSYS2: fix stdout output on Windows under MSYS2 (mailing list, props Frank)
-- DATAMATRIX: fix mis-encodation by only doing special end-of-data processing
+- DATAMATRIX: fix misencodation by only doing special end-of-data processing
   on last segment
 
 
@@ -604,9 +688,9 @@ Bugs
 - raster.c: fix possible blank rows appearing in CODE16K, CODE49, PHARMA_TWO,
   PDF417 & CODABLOCKF due to height/scale rounding, props codemonkey82 (#204)
 - library.c: check for stacking symbols >= 200
-- DATAMATRIX: fix mis-encoding of non-encodables in X12 and EDIFACT modes,
+- DATAMATRIX: fix misencoding of non-encodables in X12 and EDIFACT modes,
   props Alex Geller
-- DATAMATRIX: fix mis-encoding of FNC1/GS in EDIFACT in GS1 mode
+- DATAMATRIX: fix misencoding of FNC1/GS in EDIFACT in GS1 mode
 - Allow for dot overspill in height of vertical box sides (dotty mode)
 - HANXIN: fix gate-posts on codeword limits
 - GUI: cater for HiDPI display, props bitaround (#257)
@@ -1016,7 +1100,7 @@ by brunt@SF
 Version 2.5 2016-11-13
 ======================
 Support for DotCode and Han Xin code. ECI code processing. Output to BMP, GIF
-and PCX. Added bold and small text options. Reintroduction of Codablock-F.
+and PCX. Added bold and small text options. Reintroduction of Codablock F.
 Many minor fixes and improvements.
 
 
@@ -1050,7 +1134,7 @@ minor bugfixes for ISBN and Aztec Code, and added some small features like a
 
 Version 2.3.1 2010-04-07
 ========================
-Removed Codablock-F. Redesigned scale function so that human readable
+Removed Codablock F. Redesigned scale function so that human readable
 text and Maxicode symbols can be scaled consistently. Corrected encoding bugs
 with Code 128/Code 16k and Data Matrix ECC200 ECC 050. Added --notext option to
 CLI.
@@ -1109,7 +1193,7 @@ Version 2.1.2 2009-03-01
 ========================
 Added SVG output option. Improved Japanese character support including
 Unicode > Shift-JIS capability. Bugfixes for Data Matrix ECC200 (missing
-characters at end of string) and Codablock-F (K1/K2 check digit and row
+characters at end of string) and Codablock F (K1/K2 check digit and row
 indicators above row 6).
 
 
@@ -1122,10 +1206,10 @@ Version 2.1 2009-01-31
 ======================
 Reinstated Korea Post barcodes, harmonised bind and box options, moved
 Unicode handling into backend and added input_mode option, added size options
-to Data Matrix ECC200, added NULL character handling for Codablock-F, Code 128,
+to Data Matrix ECC200, added NULL character handling for Codablock F, Code 128,
 Code 16k, Extended Code 39, Code 93, Telepen, Maxicode, Data Matrix ECC200 ECC
-200, PDF417 and MicroPDF417. Added GS1 support for Code 16k, Codablock-F and
-Aztec Code. Added scale and direct to stdout options. Rebult Data Matrix ECC200
+200, PDF417 and MicroPDF417. Added GS1 support for Code 16k, Codablock F and
+Aztec Code. Added scale and direct to stdout options. Rebuilt Data Matrix ECC200
 ECC 200 encoding algorithms to support NULL encoding and GS1 data encoding.
 
 
@@ -1139,13 +1223,13 @@ information.
 Version 2.0 beta r2 2008-10-19
 ==============================
 Many corrections and bugfixes. (Code 11, Code 128, EAN-128,
-Aztec Code, Codablock-F, Code 16k, POSTNET, PLANET, NVE-18, PZN, Data Matrix
+Aztec Code, Codablock F, Code 16k, POSTNET, PLANET, NVE-18, PZN, Data Matrix
 ECC200, Maxicode and QR Code)
 
 
 Version 2.0 beta 2008-09-29
 ===========================
-Added support for Aztec Code, Codablock-F, Code 32, EAN-14 and DAFT
+Added support for Aztec Code, Codablock F, Code 32, EAN-14 and DAFT
 Code. Rearranged symbology numbers to match Tbarcode v8. Corrected a never
 ending loop bug in EAN-128.
 

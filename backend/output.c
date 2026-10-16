@@ -1,7 +1,7 @@
 /*  output.c - Common routines for raster/vector
 
     libzint - the open source barcode library
-    Copyright (C) 2020-2025 Robin Stuart <rstuart114@gmail.com>
+    Copyright (C) 2020-2026 Robin Stuart <rstuart114@gmail.com>
 
     Redistribution and use in source and binary forms, with or without
     modification, are permitted provided that the following conditions
@@ -189,7 +189,7 @@ INTERNAL int zint_out_colour_get_cmyk(const char *colour, int *cyan, int *magent
     return 1 + have_alpha;
 }
 
-/* Convert internal colour chars "WCBMRYGK" to RGB */
+/* Convert internal colour chars "WCBMRYGK" to RGB. Returns 1 on success, else 0 */
 INTERNAL int zint_out_colour_char_to_rgb(const unsigned char ch, unsigned char *red, unsigned char *green,
                 unsigned char *blue) {
     static const char chars[] = "WCBMRYGK";
@@ -486,8 +486,7 @@ static int out_quiet_zones(const struct zint_symbol *symbol, const int hide_text
 
         case BARCODE_TELEPEN:
         case BARCODE_TELEPEN_NUM:
-            /* Appears to be ~10X from diagram in Telepen Barcode Symbology information and History */
-            /* TODO: Find better doc */
+            /* AIM Europe USS Telepen - 10X */
             *left = *right = 10.0f;
             done = 1;
             break;
@@ -710,7 +709,8 @@ INTERNAL void zint_out_set_whitespace_offsets(const struct zint_symbol *symbol, 
 
     *p_xoffset = symbol->whitespace_width + qz_left;
     *p_roffset = symbol->whitespace_width + qz_right;
-    if (symbol->output_options & BARCODE_BOX) {
+    /* BARCODE_BIND_TOP trumps BARCODE_BOX */
+    if (!(symbol->output_options & BARCODE_BIND_TOP) && (symbol->output_options & BARCODE_BOX)) {
         *p_xoffset += symbol->border_width;
         *p_roffset += symbol->border_width;
     }
@@ -846,7 +846,7 @@ INTERNAL float zint_out_large_bar_height(struct zint_symbol *symbol, const int s
                 large_bar_height = z_stripf(roundf(large_bar_height * si) / si);
             }
             symbol->height = z_stripf(large_bar_height * zero_count + fixed_height);
-            /* Note should never happen that have both zero_count and round_rows */
+        /* Note should never happen that have both zero_count and round_rows */
         } else {
             if (round_rows) {
                 float total_height = 0.0f;
@@ -892,6 +892,7 @@ INTERNAL float zint_out_large_bar_height(struct zint_symbol *symbol, const int s
 
 #ifdef _WIN32
 /* Convert UTF-8 to Windows wide chars. Ticket #288, props Marcel */
+/* Note if change this, change versions in "frontend/main.c" and "backend/tests/testcommon.c" also */
 #define utf8_to_wide(u, w, r) \
     { \
         int lenW; /* Includes terminating NUL */ \
@@ -954,8 +955,14 @@ static int out_maybe_mkdir(const char *path) {
     return 0;
 }
 
+#ifdef ZINT_TEST /* Wrapper for direct testing */
+INTERNAL int zint_test_out_maybe_mkdir(const char *path) {
+    return out_maybe_mkdir(path);
+}
+#endif
+
 /* Create output file, creating sub-directories if necessary. Returns `fopen()` FILE pointer */
-INTERNAL FILE *zint_out_fopen(const char filename[256], const char *mode) {
+INTERNAL FILE *zint_out_fopen(char filename[256], const char *mode) {
     FILE *outfile;
 
 #ifdef _WIN32
@@ -966,12 +973,10 @@ INTERNAL FILE *zint_out_fopen(const char filename[256], const char *mode) {
         char dirname[256];
         char *d;
 #ifdef _WIN32
-        char *dirend = strrchr(filename, '\\');
-        if (!dirend) {
-            dirend = strrchr(filename, '/');
-        }
+        char *const dirend_backslash = strrchr(filename, '\\');
+        char *const dirend = dirend_backslash ? dirend_backslash : strrchr(filename, '/');
 #else
-        char *dirend = strrchr(filename, '/');
+        char *const dirend = strrchr(filename, '/');
 #endif
         if (!dirend) {
             return outfile;

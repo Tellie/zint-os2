@@ -1,7 +1,7 @@
 /* plessey.c - Handles Plessey and MSI Plessey */
 /*
     libzint - the open source barcode library
-    Copyright (C) 2008-2025 Robin Stuart <rstuart114@gmail.com>
+    Copyright (C) 2008-2026 Robin Stuart <rstuart114@gmail.com>
 
     Redistribution and use in source and binary forms, with or without
     modification, are permitted provided that the following conditions
@@ -54,10 +54,13 @@ static const char MSITable[10][8] = {
 
 /* Not MSI/Plessey but the older Plessey standard */
 INTERNAL int zint_plessey(struct zint_symbol *symbol, unsigned char source[], int length) {
+    static const char grid[9] = { 1, 1, 1, 1, 0, 1, 0, 0, 1 };
+    static const char start[8] = { '3','1','3','1','1','3','3','1' };
+    static const char stop[9] =  { '3','3','1','3','1','1','3','1','3' };
+    static const char checks[3] = { '1','3','1' }; /* Case 0 1st 2, case 1 2nd 2 */
 
     int i;
     unsigned char checkptr[67 * 4 + 8] = {0};
-    static const char grid[9] = {1, 1, 1, 1, 0, 1, 0, 0, 1};
     char dest[570]; /* 8 + 67 * 8 + 2 * 8 + 9 + 1 = 570 */
     char *d = dest;
     unsigned int check_digits = 0;
@@ -74,7 +77,7 @@ INTERNAL int zint_plessey(struct zint_symbol *symbol, unsigned char source[], in
     }
 
     /* Start character */
-    memcpy(d, "31311331", 8);
+    memcpy(d, start, 8);
     d += 8;
 
     /* Data area */
@@ -101,11 +104,11 @@ INTERNAL int zint_plessey(struct zint_symbol *symbol, unsigned char source[], in
     for (i = 0; i < 8; i++) {
         switch (checkptr[length * 4 + i]) {
             case 0:
-                memcpy(d, "13", 2);
+                memcpy(d, checks, 2);
                 d += 2;
                 break;
             case 1:
-                memcpy(d, "31", 2);
+                memcpy(d, checks + 1, 2);
                 d += 2;
                 check_digits |= (1 << i);
                 break;
@@ -113,10 +116,10 @@ INTERNAL int zint_plessey(struct zint_symbol *symbol, unsigned char source[], in
     }
 
     /* Stop character */
-    memcpy(d, "331311313", 9);
+    memcpy(d, stop, 9);
     d += 9;
 
-    z_expand(symbol, dest, d - dest);
+    z_expand(symbol, dest, (int) (d - dest));
 
     /* TODO: Find documentation on BARCODE_PLESSEY dimensions/height */
 
@@ -327,6 +330,7 @@ static char *msi_plessey_mod1110(struct zint_symbol *symbol, const unsigned char
 }
 
 INTERNAL int zint_msi_plessey(struct zint_symbol *symbol, unsigned char source[], int length) {
+    static const char stop_start[3] = { '1','2','1' }; /* All 3 stop, last 2 start */
     int error_number = 0;
     int i;
     char dest[766]; /* 2 + 92 * 8 + 3 * 8 + 3 + 1 = 766 */
@@ -354,7 +358,7 @@ INTERNAL int zint_msi_plessey(struct zint_symbol *symbol, unsigned char source[]
     }
 
     /* Start character */
-    memcpy(d, "21", 2);
+    memcpy(d, stop_start + 1, 2);
     d += 2;
 
     switch (check_option) {
@@ -372,10 +376,10 @@ INTERNAL int zint_msi_plessey(struct zint_symbol *symbol, unsigned char source[]
     }
 
     /* Stop character */
-    memcpy(d, "121", 3);
+    memcpy(d, stop_start, 3);
     d += 3;
 
-    z_expand(symbol, dest, d - dest);
+    z_expand(symbol, dest, (int) (d - dest));
 
     /* TODO: Find documentation on BARCODE_MSI_PLESSEY dimensions/height */
 

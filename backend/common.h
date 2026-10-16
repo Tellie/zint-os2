@@ -1,7 +1,7 @@
 /* common.h - Header for all common functions in common.c */
 /*
     libzint - the open source barcode library
-    Copyright (C) 2009-2025 Robin Stuart <rstuart114@gmail.com>
+    Copyright (C) 2009-2026 Robin Stuart <rstuart114@gmail.com>
 
     Redistribution and use in source and binary forms, with or without
     modification, are permitted provided that the following conditions
@@ -133,15 +133,22 @@ typedef unsigned __int64 uint64_t;
 #  define roundf(arg) floorf((arg) + 0.5f)
 #endif
 
+/* Whether `vsnprintf()` available */
+#if (defined(_MSC_VER) && _MSC_VER < 1900) || defined(ZINT_IS_C89) /* Pre-MSVC 2015 (C++ 14.0) or C89 */
+#define Z_NO_VSNPRINTF
+#endif
+
 /* Is float integral value? (https://stackoverflow.com/a/40404149) */
 #define z_isfintf(arg) (fmodf(arg, 1.0f) == 0.0f)
 
 /* Simple versions of <ctype.h> functions with no dependence on locale */
-#define z_isdigit(c) ((c) <= '9' && (c) >= '0')
-#define z_isupper(c) ((c) >= 'A' && (c) <= 'Z')
-#define z_islower(c) ((c) >= 'a' && (c) <= 'z')
-#define z_isascii(c) (!((c) & ~0x7F))
-#define z_iscntrl(c) (z_isascii(c) && ((c) < 32 || (c) == 127))
+#define z_isdigit(ch)   ((ch) <= '9' && (ch) >= '0')
+#define z_isxdigit(ch)  (z_isdigit(ch) || (((ch) | 0x20) >= 'a' && ((ch) | 0x20) <= 'f'))
+#define z_isupper(ch)   ((ch) >= 'A' && (ch) <= 'Z')
+#define z_islower(ch)   ((ch) >= 'a' && (ch) <= 'z')
+#define z_isalpha(ch)   z_islower(ch | 0x20)
+#define z_isascii(ch)   (!((ch) & ~0x7F))
+#define z_iscntrl(ch)   (!((ch) & ~0x1F) || (ch) == 127)
 
 /* Shorthands to cast away char pointer signedness */
 #define ZUCP(p)     ((unsigned char *) (p))
@@ -155,7 +162,7 @@ typedef unsigned __int64 uint64_t;
 #define z_xtoc(i) ((i) < 10 ? z_itoc(i) : ((i) - 10) + 'A')
 
 /* Converts a character 0-9, A-F to its equivalent integer value */
-INTERNAL int z_ctoi(const char source);
+INTERNAL int z_ctoi(const char ch);
 
 /* Converts decimal string of length <= 9 to integer value. Returns -1 if not numeric */
 INTERNAL int z_to_int(const unsigned char source[], const int length);
@@ -163,8 +170,11 @@ INTERNAL int z_to_int(const unsigned char source[], const int length);
 /* Converts lower case characters to upper case in string `source` */
 INTERNAL void z_to_upper(unsigned char source[], const int length);
 
-/* Returns the number of times a character occurs in `source` */
-INTERNAL int z_chr_cnt(const unsigned char source[], const int length, const unsigned char c);
+/* Returns the number of times a character `ch` occurs in `source` */
+INTERNAL int z_chr_cnt(const unsigned char source[], const int length, const unsigned char ch);
+
+/* Zero-fill `dest` buffer, appending `source'. Returns no. of zeroes added */
+INTERNAL int z_zero_fill(const unsigned char source[], const int length, unsigned char *dest, const int dest_length);
 
 /* `z_is_chr()` & `z_not_sane()` flags */
 #define IS_SPC_F    0x0001 /* Space */
@@ -190,11 +200,11 @@ INTERNAL int z_chr_cnt(const unsigned char source[], const int length, const uns
 /* The most commonly used set */
 #define NEON_F      IS_NUM_F /* NEON "0123456789" */
 
-/* Whether a character matches `flg` */
-INTERNAL int z_is_chr(const unsigned int flg, const unsigned int c);
+/* Whether a character `ch` matches `flag` */
+INTERNAL int z_is_chr(const unsigned int flag, const unsigned int ch);
 
 /* Verifies if a string only uses valid characters, returning 1-based position in `source` if not, 0 for success */
-INTERNAL int z_not_sane(const unsigned int flg, const unsigned char source[], const int length);
+INTERNAL int z_not_sane(const unsigned int flag, const unsigned char source[], const int length);
 
 /* Verifies if a string only uses valid characters as above, but also returns `test_string` position of each in
    `posns` array */
@@ -307,6 +317,17 @@ INTERNAL int z_utf8_to_unicode(struct zint_symbol *symbol, const unsigned char s
                 int *length, const int disallow_4byte);
 
 
+/* Check if `source` starts with manual FNC1 in 1st or 2nd position, returning length of extra escape sequence if so,
+   else 0 */
+INTERNAL int z_extra_escape_position_fnc1(const unsigned char source[], const int length);
+
+/* Process `source` for extra escape sequences, placing result in `dest`, updating `p_length`, and setting `fncs` with
+   any found FNC1s. Sets `p_have_extra_escapes` if any sequences found. `eci` is checked to be ASCII-compatible (UTF-8
+   & single-byte ECIs, excl. Binary 899). On error sets `errtxt` & returns error no. */
+INTERNAL int z_extra_escapes(struct zint_symbol *symbol, const unsigned char source[], int *p_length, const int eci,
+                unsigned char *dest, char *fncs, int *p_have_extra_escapes);
+
+
 /* Treats source as ISO/IEC 8859-1 and copies into `symbol->text`, converting to UTF-8. Control chars (incl. DEL) and
    non-ISO/IEC 8859-1 (0x80-9F) are replaced with spaces. Returns warning if truncated, else 0 */
 INTERNAL int z_hrt_cpy_iso8859_1(struct zint_symbol *symbol, const unsigned char source[], const int length);
@@ -319,7 +340,7 @@ INTERNAL void z_hrt_cpy_nochk(struct zint_symbol *symbol, const unsigned char so
 INTERNAL void z_hrt_cpy_cat_nochk(struct zint_symbol *symbol, const unsigned char source[], const int length,
                 const char separator, const unsigned char cat[], const int cat_length);
 
-/* Copy a single ASCII character into `symbol->text` (i.e. replaces content) */
+/* Copy a single ASCII character `ch` into `symbol->text` (i.e. replaces content) */
 INTERNAL void z_hrt_cpy_chr(struct zint_symbol *symbol, const char ch);
 
 /* No-check as-is append of ASCII to `symbol->text`, assuming current `symbol->text_length` + `length` fits */
@@ -335,6 +356,12 @@ INTERNAL void z_hrt_printf_nochk(struct zint_symbol *symbol, const char *fmt, ..
 INTERNAL void z_hrt_conv_gs1_brackets_nochk(struct zint_symbol *symbol, const unsigned char source[],
                 const int length);
 
+#ifdef ZINT_TEST
+/* For testing content segment `calloc()`/`malloc()` failures */
+#define Z_CT_FAIL_ID_INIT_SEGS      1
+#define Z_CT_FAIL_ID_INIT_SEG_SRC   2
+INTERNAL void zint_test_ct_set_fail(const int id, const int at);
+#endif
 
 /* Initialize `content_segs` for `seg_count` segments. On error sets `errtxt`, returning BARCODE_ERROR_MEMORY */
 INTERNAL int z_ct_init_segs(struct zint_symbol *symbol, const int seg_count);
@@ -345,6 +372,10 @@ INTERNAL void z_ct_free_segs(struct zint_symbol *symbol);
 /* Copy `segs` to content segs. Seg source copied as-is. If seg length <= 0, content reg length set to `strlen()`.
    If seg eci not set, content seg eci set to 3. On error sets `errxtxt`, returning BARCODE_ERROR_MEMORY */
 INTERNAL int z_ct_cpy_segs(struct zint_symbol *symbol, const struct zint_seg segs[], const int seg_count);
+
+/* Process content seg `seg_idx` buffer for manual FNC1 extra escape sequences (which must exist),
+   and update its ECI to `eci`, if set, to reflect (feedback) the actual ECI used */
+INTERNAL void z_ct_set_seg_extra_escapes_eci(struct zint_symbol *symbol, const int seg_idx, const int eci);
 
 /* Update the ECI of content seg `seg_idx` to `eci`, to reflect (feedback) the actual ECI used */
 INTERNAL void z_ct_set_seg_eci(struct zint_symbol *symbol, const int seg_idx, const int eci);

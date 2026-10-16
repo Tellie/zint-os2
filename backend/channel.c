@@ -1,7 +1,7 @@
 /* channel.c - Handles Channel */
 /*
     libzint - the open source barcode library
-    Copyright (C) 2008-2025 Robin Stuart <rstuart114@gmail.com>
+    Copyright (C) 2008-2026 Robin Stuart <rstuart114@gmail.com>
 
     Redistribution and use in source and binary forms, with or without
     modification, are permitted provided that the following conditions
@@ -35,9 +35,9 @@
 #include <stdio.h>
 #include "common.h"
 
-typedef const struct s_channel_precalc {
+struct channel_precalc {
     int value; unsigned char B[8]; unsigned char S[8]; unsigned char bmax[7]; unsigned char smax[7];
-} channel_precalc;
+};
 
 #if 0
 #define CHANNEL_GENERATE_PRECALCS
@@ -49,8 +49,8 @@ typedef const struct s_channel_precalc {
 static void channel_generate_precalc(int channels, int value, int mod, int last, int B[8], int S[8], int bmax[7],
             int smax[7]) {
     int i;
-    if (value == mod) printf("static channel_precalc channel_precalcs%d[] = {\n", channels);
-    printf("    { %7ld, {", value); for (i = 0; i < 8; i++) printf(" %d,", B[i]); fputs(" },", stdout);
+    if (value == mod) printf("static const struct channel_precalc channel_precalcs%d[] = {\n", channels);
+    printf("    { %7d, {", value); for (i = 0; i < 8; i++) printf(" %d,", B[i]); fputs(" },", stdout);
     fputs(" {", stdout); for (i = 0; i < 8; i++) printf(" %d,", S[i]); fputs(" },", stdout);
     fputs(" {", stdout); for (i = 0; i < 7; i++) printf(" %d,", bmax[i]); fputs(" },", stdout);
     fputs(" {", stdout); for (i = 0; i < 7; i++) printf(" %d,", smax[i]); fputs(" }, },\n", stdout);
@@ -60,7 +60,8 @@ static void channel_generate_precalc(int channels, int value, int mod, int last,
 #include "channel_precalcs.h"
 #endif
 
-static int channel_copy_precalc(channel_precalc *const precalc, int B[8], int S[8], int bmax[7], int smax[7]) {
+static int channel_copy_precalc(const struct channel_precalc *const precalc, int B[8], int S[8], int bmax[7],
+            int smax[7]) {
     int i;
 
     for (i = 0; i < 7; i++) {
@@ -75,7 +76,7 @@ static int channel_copy_precalc(channel_precalc *const precalc, int B[8], int S[
     return precalc->value;
 }
 
-/* CHNCHR is adapted from ANSI/AIM BC12-1998 Annex D Figure D5 and is Copyright (c) AIM 1997 */
+/* CHNCHR is adapted from ANSI/AIM BC12-1998 Annex D Figure D5 and is Copyright © AIM 1997 */
 
 /* It is used here on the understanding that it forms part of the specification
    for Channel Code and therefore its use is permitted under the following terms
@@ -87,8 +88,9 @@ static int channel_copy_precalc(channel_precalc *const precalc, int B[8], int S[
    assume no liability for the use of this document." */
 static void CHNCHR(int channels, int target_value, int B[8], int S[8]) {
     /* Use of initial pre-calculations taken from Barcode Writer in Pure PostScript (BWIPP)
-     * Copyright (c) 2004-2020 Terry Burton (MIT/X-Consortium license) */
-    static channel_precalc initial_precalcs[6] = {
+       Copyright (c) 2004-2026 Terry Burton */
+    /* SPDX-License-Identifier: MIT */
+    static const struct channel_precalc initial_precalcs[6] = {
         { 0, { 1, 1, 1, 1, 1, 2, 1, 2, }, { 1, 1, 1, 1, 1, 1, 1, 3, }, { 1, 1, 1, 1, 1, 3, 2, },
             { 1, 1, 1, 1, 1, 3, 3, }, },
         { 0, { 1, 1, 1, 1, 2, 1, 1, 3, }, { 1, 1, 1, 1, 1, 1, 1, 4, }, { 1, 1, 1, 1, 4, 3, 3, },
@@ -174,7 +176,8 @@ nb0:    if (++B[0] <= bmax[0]) goto lb0;
 /* Channel Code - According to ANSI/AIM BC12-1998 */
 INTERNAL int zint_channel(struct zint_symbol *symbol, unsigned char source[], int length) {
     static const int max_ranges[] = { -1, -1, -1, 26, 292, 3493, 44072, 576688, 7742862 };
-    static const unsigned char zeroes_str[] = "0000000"; /* 7 zeroes */
+    static const unsigned char zeroes_str[7] = { '0','0','0','0','0','0','0' };
+    static const char finder_pattern[9] = { '1','1','1','1','1','1','1','1','1' };
     int S[8] = {0}, B[8] = {0};
     int target_value;
     char dest[30];
@@ -232,14 +235,14 @@ INTERNAL int zint_channel(struct zint_symbol *symbol, unsigned char source[], in
 
     CHNCHR(channels, target_value, B, S);
 
-    memcpy(d, "111111111", 9); /* Finder pattern */
+    memcpy(d, finder_pattern, 9); /* Finder pattern */
     d += 9;
     for (i = 8 - channels; i < 8; i++) {
         *d++ = z_itoc(S[i]);
         *d++ = z_itoc(B[i]);
     }
 
-    z_expand(symbol, dest, d - dest);
+    z_expand(symbol, dest, (int) (d - dest));
 
     if (symbol->output_options & COMPLIANT_HEIGHT) {
         /* ANSI/AIM BC12-1998 gives min height as 5mm or 15% of length; X left as application specification so use

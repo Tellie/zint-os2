@@ -1,7 +1,7 @@
 /* code128_based.c - Handles Code 128 derivatives NVE-18, EAN-14, DPD and Universal Postal Union S10 */
 /*
     libzint - the open source barcode library
-    Copyright (C) 2008-2025 Robin Stuart <rstuart114@gmail.com>
+    Copyright (C) 2008-2026 Robin Stuart <rstuart114@gmail.com>
     Bugfixes thanks to Christian Sakowski and BogDan Vatra
 
     Redistribution and use in source and binary forms, with or without
@@ -49,7 +49,7 @@ static int nve18_or_ean14(struct zint_symbol *symbol, const unsigned char source
     };
     const int idx = data_len == 17;
     unsigned char ean128_equiv[23];
-    int i, zeroes;
+    int i;
     unsigned char have_check_digit = '\0';
     unsigned char check_digit;
     int error_number;
@@ -79,10 +79,8 @@ static int nve18_or_ean14(struct zint_symbol *symbol, const unsigned char source
         length--;
     }
 
-    zeroes = data_len - length;
     memcpy(ean128_equiv, prefix[idx][!(symbol->input_mode & GS1PARENS_MODE)], 4);
-    memset(ean128_equiv + 4, '0', zeroes);
-    memcpy(ean128_equiv + 4 + zeroes, source, length);
+    z_zero_fill(source, length, ean128_equiv + 4, data_len);
 
     check_digit = (unsigned char) zint_gs1_check_digit(ean128_equiv + 4, data_len);
     if (have_check_digit && have_check_digit != check_digit) {
@@ -94,7 +92,7 @@ static int nve18_or_ean14(struct zint_symbol *symbol, const unsigned char source
 
     error_number = zint_gs1_128(symbol, ean128_equiv, data_len + 5);
 
-    /* Use `raw_text` set by `zint_gs1_128()` */
+    /* Use `content_segs` set by `zint_gs1_128()` */
 
     return error_number;
 }
@@ -219,7 +217,7 @@ INTERNAL int zint_dpd(struct zint_symbol *symbol, unsigned char source[], int le
 
     z_hrt_cpy_nochk(symbol, hrt, p + 1);
 
-    /* Use `raw_text` from `zint_code128()` */
+    /* Use `content_segs` from `zint_code128()` */
 
     /* Some compliance checks */
     if (z_not_sane(NEON_F, local_source + length - 16, 16)) {
@@ -323,7 +321,7 @@ INTERNAL int zint_upu_s10(struct zint_symbol *symbol, unsigned char source[], in
     }
     z_hrt_cpy_nochk(symbol, hrt, j);
 
-    /* Use `raw_text` set by `zint_code128()` */
+    /* Use `content_segs` set by `zint_code128()` */
 
     if (symbol->output_options & COMPLIANT_HEIGHT) {
         /* Universal Postal Union S10 Section 8, using max X 0.51mm & minimum height 12.5mm or 15% of width */

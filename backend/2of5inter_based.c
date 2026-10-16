@@ -1,7 +1,7 @@
 /* 2of5_based.c - Handles Code 2 of 5 Interleaved derivatives ITF-14, DP Leitcode and DP Identcode */
 /*
     libzint - the open source barcode library
-    Copyright (C) 2008-2025 Robin Stuart <rstuart114@gmail.com>
+    Copyright (C) 2008-2026 Robin Stuart <rstuart114@gmail.com>
 
     Redistribution and use in source and binary forms, with or without
     modification, are permitted provided that the following conditions
@@ -41,7 +41,7 @@ INTERNAL int zint_c25_inter_common(struct zint_symbol *symbol, unsigned char sou
 
 /* Interleaved 2-of-5 (ITF-14) */
 INTERNAL int zint_itf14(struct zint_symbol *symbol, unsigned char source[], int length) {
-    int i, error_number, zeroes;
+    int i, error_number;
     unsigned char local_source[14];
     unsigned char have_check_digit = '\0';
     unsigned char check_digit;
@@ -70,11 +70,7 @@ INTERNAL int zint_itf14(struct zint_symbol *symbol, unsigned char source[], int 
     }
 
     /* Add leading zeros as required */
-    zeroes = 13 - length;
-    for (i = 0; i < zeroes; i++) {
-        local_source[i] = '0';
-    }
-    memcpy(local_source + zeroes, source, length);
+    z_zero_fill(source, length, local_source, 13);
 
     /* Calculate the check digit - the same method used for EAN-13 */
     check_digit = (unsigned char) zint_gs1_check_digit(local_source, 13);
@@ -109,7 +105,7 @@ INTERNAL int zint_itf14(struct zint_symbol *symbol, unsigned char source[], int 
 
     z_hrt_cpy_nochk(symbol, local_source, 14);
 
-    /* Use `raw_text` set by `zint_c25_inter_common()` */
+    /* Use `content_segs` set by `zint_c25_inter_common()` */
 
     return error_number;
 }
@@ -128,7 +124,6 @@ INTERNAL int zint_dpleit(struct zint_symbol *symbol, unsigned char source[], int
     unsigned int count;
     int factor;
     unsigned char local_source[14];
-    int zeroes;
 
     count = 0;
     if (length > 13) {
@@ -139,10 +134,7 @@ INTERNAL int zint_dpleit(struct zint_symbol *symbol, unsigned char source[], int
                         "Invalid character at position %d in input (digits only)", i);
     }
 
-    zeroes = 13 - length;
-    for (i = 0; i < zeroes; i++)
-        local_source[i] = '0';
-    memcpy(local_source + zeroes, source, length);
+    z_zero_fill(source, length, local_source, 13);
 
     factor = 4;
     for (i = 12; i >= 0; i--) {
@@ -161,7 +153,7 @@ INTERNAL int zint_dpleit(struct zint_symbol *symbol, unsigned char source[], int
     z_hrt_printf_nochk(symbol, "%.5s.%.3s.%.3s.%.3s", local_source, local_source + 5, local_source + 8,
                         local_source + 11);
 
-    /* Use `raw_text` set by `zint_c25_inter_common()` */
+    /* Use `content_segs` set by `zint_c25_inter_common()` */
 
     return error_number;
 }
@@ -169,7 +161,7 @@ INTERNAL int zint_dpleit(struct zint_symbol *symbol, unsigned char source[], int
 /* Deutsche Post Identcode */
 /* See dpleit() for (sort of) documentation reference */
 INTERNAL int zint_dpident(struct zint_symbol *symbol, unsigned char source[], int length) {
-    int i, error_number, zeroes;
+    int i, error_number;
     unsigned int count;
     int factor;
     unsigned char local_source[12];
@@ -183,10 +175,7 @@ INTERNAL int zint_dpident(struct zint_symbol *symbol, unsigned char source[], in
                         "Invalid character at position %d in input (digits only)", i);
     }
 
-    zeroes = 11 - length;
-    for (i = 0; i < zeroes; i++)
-        local_source[i] = '0';
-    memcpy(local_source + zeroes, source, length);
+    z_zero_fill(source, length, local_source, 11);
 
     factor = 4;
     for (i = 10; i >= 0; i--) {
@@ -204,7 +193,7 @@ INTERNAL int zint_dpident(struct zint_symbol *symbol, unsigned char source[], in
     z_hrt_printf_nochk(symbol, "%.2s.%.2s %c.%.3s.%.3s %c", local_source, local_source + 2, local_source[4],
                         local_source + 5, local_source + 8, local_source[11]);
 
-    /* Use `raw_text` set by `zint_c25_inter_common()` */
+    /* Use `content_segs` set by `zint_c25_inter_common()` */
 
     return error_number;
 }

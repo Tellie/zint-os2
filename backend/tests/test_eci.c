@@ -1,6 +1,6 @@
 /*
     libzint - the open source barcode library
-    Copyright (C) 2019-2025 Robin Stuart <rstuart114@gmail.com>
+    Copyright (C) 2019-2026 Robin Stuart <rstuart114@gmail.com>
 
     Redistribution and use in source and binary forms, with or without
     modification, are permitted provided that the following conditions
@@ -698,6 +698,7 @@ static void test_utf8_to_eci_sb(const testCtx *const p_ctx) {
 
     unsigned char source[5];
     unsigned char dest[2] = {0};
+    const unsigned char source0x012c[] = "\xC4\xAC"; /* 0x012c not in any single-byte tables */
 
     testStart(p_ctx->func_name);
 
@@ -738,6 +739,12 @@ static void test_utf8_to_eci_sb(const testCtx *const p_ctx) {
                 }
             }
         }
+        j = 0x012c;
+        length = 2;
+        ret = zint_utf8_to_eci(data[i].eci, source0x012c, dest, &length);
+        assert_equal(ret, ZINT_ERROR_INVALID_DATA,
+            "i:%d eci:%d codepoint:0x%x source:%s zint_utf8_to_eci ret %d != ZINT_ERROR_INVALID_DATA\n",
+            i, data[i].eci, j, source0x012c, ret);
     }
 
     testFinish();
@@ -1091,7 +1098,7 @@ static void test_utf8_to_eci_sjis(const testCtx *const p_ctx) {
         /*  1*/ { " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}\177", 95, 0, 95 + 1 }, /* Backslash goes to 2 byte */
         /*  2*/ { "~", -1, ZINT_ERROR_INVALID_DATA, -1 }, /* No mapping for tilde */
         /*  3*/ { "\302\200", -1, ZINT_ERROR_INVALID_DATA, -1 }, /* No mapping for U+0080 */
-        /*  4*/ { "\302\241", -1, ZINT_ERROR_INVALID_DATA, -1 }, /* No mapping for U+00A1 Inverted exclaimation mark */
+        /*  4*/ { "\302\241", -1, ZINT_ERROR_INVALID_DATA, -1 }, /* No mapping for U+00A1 Inverted exclamation mark */
         /*  5*/ { "\302\245", -1, 0, 1 }, /* U+00A5 Yen goes to backslash */
         /*  6*/ { "\302\277", -1, ZINT_ERROR_INVALID_DATA, -1 }, /* No mapping for U+00BF Inverted question mark */
         /*  7*/ { "\303\200", -1, ZINT_ERROR_INVALID_DATA, -1 }, /* No mapping for U+00C0 À */
@@ -1397,6 +1404,7 @@ static void test_utf8_to_eci_binary(const testCtx *const p_ctx) {
         /*  3*/ { "\302\220\302\221\302\222\302\223\302\224\302\225\302\226\302\227\302\230\302\231\302\232\302\233\302\234\302\235\302\236\302\237", 32, 0, 16 },
         /*  4*/ { "\303\200\303\201\303\202\303\203\303\204\303\205\303\206\303\207\303\210\303\211\303\212\303\213\303\214\303\215\303\216\303\217", 32, 0, 16 },
         /*  5*/ { "\303\220\303\221\303\222\303\223\303\224\303\225\303\226\303\227\303\230\303\231\303\232\303\233\303\234\303\235\303\236\303\237", 32, 0, 16 },
+        /*  6*/ { "\304\242", 2, ZINT_ERROR_INVALID_DATA, -1 },
     };
     int data_size = ARRAY_SIZE(data);
     int i, length, ret;

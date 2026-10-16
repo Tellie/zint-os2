@@ -49,7 +49,7 @@ INTERNAL int zint_out_colour_get_rgb(const char *colour, unsigned char *red, uns
 INTERNAL int zint_out_colour_get_cmyk(const char *colour, int *cyan, int *magenta, int *yellow, int *black,
                 unsigned char *rgb_alpha);
 
-/* Convert internal colour chars "WCBMRYGK" to RGB */
+/* Convert internal colour chars "WCBMRYGK" to RGB. Returns 1 on success, else 0 */
 INTERNAL int zint_out_colour_char_to_rgb(const unsigned char ch, unsigned char *red, unsigned char *green,
                 unsigned char *blue);
 
@@ -71,7 +71,7 @@ INTERNAL float zint_out_large_bar_height(struct zint_symbol *symbol, const int s
                 int *symbol_height_si);
 
 /* Create output file, creating sub-directories if necessary. Returns `fopen()` FILE pointer */
-INTERNAL FILE *zint_out_fopen(const char filename[256], const char *mode);
+INTERNAL FILE *zint_out_fopen(char filename[256], const char *mode);
 
 #ifdef _WIN32
 /* Do `fopen()` on Windows, assuming `filename` is UTF-8 encoded. Props Marcel, ticket #288 */
