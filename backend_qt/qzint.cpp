@@ -25,6 +25,7 @@
 #if 0
 #include <QDebug>
 #endif
+#include <QFile>
 #include <QFontDatabase>
 #include <QFontMetrics>
 /* The following include is necessary to compile with Qt 5.15 on Windows; Qt 5.7 did not require it */
@@ -1006,7 +1007,12 @@ namespace Zint {
     /* Encode and print barcode to file `filename`. Only sets `getError()` on error, not on warning */
     bool QZint::save_to_file(const QString& filename) {
         if (resetSymbol()) {
+#ifdef __OS2__
+            /* OS/2: file names are in the process codepage, not UTF-8 */
+            cpy_bytearray_left(m_zintSymbol->outfile, QFile::encodeName(filename), ARRAY_SIZE(m_zintSymbol->outfile) - 1);
+#else
             cpy_bytearray_left(m_zintSymbol->outfile, filename.toUtf8(), ARRAY_SIZE(m_zintSymbol->outfile) - 1);
+#endif
             if (m_segs.empty()) {
                 QByteArray bstr = m_text.toUtf8();
                 m_error = ZBarcode_Encode_and_Print(m_zintSymbol, (unsigned char *) bstr.data(), (int) bstr.length(),
