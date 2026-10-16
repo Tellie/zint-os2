@@ -525,7 +525,7 @@ static void test_input(const testCtx *const p_ctx) {
 #define TEST_MIRRORED_DIR_LONG "testdir_9012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789/" /* 220 chars */
 #define TEST_MIRRORED_DIR_TOO_LONG "testdir_901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901/" /* 222 chars */
 
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__OS2__)
 #define TEST_INPUT_AMPERSAND_EXPECTED "***1.gif\000***2.gif"
 #define TEST_INPUT_BSLASH   "\\"
 #define TEST_INPUT_EXCLAIM  "!"
@@ -615,7 +615,7 @@ static void test_input(const testCtx *const p_ctx) {
         int expected_len;
 
         if (testContinue(p_ctx, i)) continue;
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__OS2__)
         if (data[i].outfile && (int) strlen(data[i].outfile) > 50) {
             if (debug & ZINT_DEBUG_TEST_PRINT) {
                 printf("%d not Windows compatible (outfile length %d > 50)\n", i, (int) strlen(data[i].outfile));
@@ -844,8 +844,8 @@ static void test_batch_large(const testCtx *const p_ctx) {
 
     testStart("test_batch_large");
 
-#ifdef _WIN32
-    testSkip("Test not compatible with Windows");
+#if defined(_WIN32) || defined(__OS2__)
+    testSkip("Test not compatible with Windows/OS/2 (path length)");
     return;
 #endif
 

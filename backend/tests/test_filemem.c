@@ -116,7 +116,7 @@ static void test_file(const testCtx *const p_ctx) {
     testFinish();
 }
 
-#if defined(_WIN32) || defined(__OS2__) || (defined(__sun) && defined(__SVR4))
+#if defined(_WIN32) || (defined(__sun) && defined(__SVR4)) || defined(__OS2__) /* OS/2 kLIBC: no fmemopen() */
 #define ZINT_TEST_NO_FMEMOPEN
 #endif
 
@@ -248,7 +248,7 @@ static void test_printf(const testCtx *const p_ctx) {
 
     const char fmt1[] = "\n%s%04d\n\032\nwow\n\r\n%.2s\n"; /* '\032' SUB (^Z) */
     const char expected1[] = "\ngosh0123\n\032\nwow\n\r\nge\n";
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__OS2__)
     /* On Windows, non-binary (i.e. text) files, LF -> LF+CR (note, actual files only, not memfiles) */
     const char expected1_text_file[] = "\r\ngosh0123\r\n\032\r\nwow\r\n\r\r\nge\r\n";
 #endif
@@ -304,7 +304,7 @@ static void test_printf(const testCtx *const p_ctx) {
         expected = expected1;
         if (j == 1) {
             strcpy(symbol->outfile, outfile);
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__OS2__)
             expected = expected1_text_file;
 #endif
         } else {
