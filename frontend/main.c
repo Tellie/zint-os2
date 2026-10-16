@@ -998,7 +998,7 @@ static int mirror_start(const struct zint_symbol *const symbol, const int output
 
     /* Use directory if any from outfile */
     if (output_given && symbol->outfile[0]) {
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__OS2__)
         const char *dir = strrchr(symbol->outfile, '/');
 #else
         const char *dir = strrchr(symbol->outfile, '\\');
@@ -1037,14 +1037,14 @@ static void mirror_outfile(struct zint_symbol *const symbol, const unsigned char
             output_file[o] = '_';
         } else {
             switch (source[i]) {
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__OS2__)
                 case '/':
                     output_file[o] = '_';
                     break;
                 case '\\':
                     output_file[o] = escape_mode ? '_' : '\\';
                     break;
-#else /* These are all forbidden on Windows */
+#else /* These are all forbidden on Windows (and OS/2) */
                 case '!':
                 case '"':
                 case '*':
@@ -1192,7 +1192,7 @@ static int batch_process(struct zint_symbol *const symbol, const char *const fil
                                 adjusted = reverse_number[inpos - 1];
                                 inpos--;
                             } else {
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__OS2__)
                                 adjusted = '*';
 #else
                                 adjusted = '+';
@@ -3196,7 +3196,7 @@ static int test_mirror_start(void) {
     return 1;
 }
 
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__OS2__)
 #define TEST_MIRROR_BSLASH   "\\"
 #define TEST_MIRROR_EXCLAIM  "!"
 #define TEST_MIRROR_DQUOTE   "\""
