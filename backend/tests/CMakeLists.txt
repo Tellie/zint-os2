@@ -23,8 +23,11 @@ check_function_exists(arc4random_uniform HAVE_ARC4RANDOM_UNIFORM)
 
 set(testcommon_SRCS testcommon.c testcommon.h)
 
+# Always static: helper library only for the test programs. Without STATIC it follows BUILD_SHARED_LIBS,
+# which the RPM %cmake macro sets to ON (giving an OS/2 DLL "testcomm.dll" with no exports)
+
 if(ZINT_SHARED)
-    add_library(testcommon ${testcommon_SRCS})
+    add_library(testcommon STATIC ${testcommon_SRCS})
     target_link_libraries(testcommon zint)
     target_include_directories(testcommon PUBLIC ${zint_backend_tests_SOURCE_DIR})
     if(NOT (ZINT_USE_PNG AND PNG_FOUND))
@@ -33,7 +36,7 @@ if(ZINT_SHARED)
 endif()
 
 if(ZINT_STATIC)
-    add_library(testcommon-static ${testcommon_SRCS})
+    add_library(testcommon-static STATIC ${testcommon_SRCS})
     target_link_libraries(testcommon-static zint-static)
     target_include_directories(testcommon-static PUBLIC ${zint_backend_tests_SOURCE_DIR})
     if(NOT (ZINT_USE_PNG AND PNG_FOUND))
