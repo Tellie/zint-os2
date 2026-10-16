@@ -20,6 +20,11 @@ macro(zint_add_test test_name test_command)
             string(REPLACE ";" "\\;" env_path "$ENV{PATH}")
             set_tests_properties(${test_name} PROPERTIES ENVIRONMENT
                     "CMAKE_CURRENT_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR};PATH=${CMAKE_BINARY_DIR}/backend/${CMAKE_BUILD_TYPE}\;${CMAKE_BINARY_DIR}/frontend/${CMAKE_BUILD_TYPE}\;${env_path}")
+        elseif(CMAKE_SYSTEM_NAME STREQUAL "OS2")
+            # OS/2: PATH uses ';', DLLs are found via (BEGIN)LIBPATH, not LD_LIBRARY_PATH
+            string(REPLACE ";" "\\;" env_path "$ENV{PATH}")
+            set_tests_properties(${test_name} PROPERTIES ENVIRONMENT
+                "CMAKE_CURRENT_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR};PATH=${CMAKE_BINARY_DIR}/frontend\;${env_path}")
         else()
             set_tests_properties(${test_name} PROPERTIES ENVIRONMENT
                 "CMAKE_CURRENT_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR};LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}/backend;PATH=${CMAKE_BINARY_DIR}/frontend:$ENV{PATH}")
@@ -39,6 +44,11 @@ macro(zint_add_test test_name test_command)
             string(REPLACE ";" "\\;" env_path "$ENV{PATH}")
             set_tests_properties(${test_name}-static PROPERTIES ENVIRONMENT
                 "CMAKE_CURRENT_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR};PATH=${CMAKE_BINARY_DIR}/backend/${CMAKE_BUILD_TYPE}\;${CMAKE_BINARY_DIR}/frontend/${CMAKE_BUILD_TYPE}\;${env_path}")
+        elseif(CMAKE_SYSTEM_NAME STREQUAL "OS2")
+            # OS/2: PATH uses ';', DLLs are found via (BEGIN)LIBPATH, not LD_LIBRARY_PATH
+            string(REPLACE ";" "\\;" env_path "$ENV{PATH}")
+            set_tests_properties(${test_name}-static PROPERTIES ENVIRONMENT
+                "CMAKE_CURRENT_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR};PATH=${CMAKE_BINARY_DIR}/frontend\;${env_path}")
         else()
             set_tests_properties(${test_name}-static PROPERTIES ENVIRONMENT
                 "CMAKE_CURRENT_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR};LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}/backend;PATH=${CMAKE_BINARY_DIR}/frontend:$ENV{PATH}")
