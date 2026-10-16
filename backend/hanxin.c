@@ -1,7 +1,7 @@
 /*  hanxin.c - Han Xin Code */
 /*
     libzint - the open source barcode library
-    Copyright (C) 2009-2025 Robin Stuart <rstuart114@gmail.com>
+    Copyright (C) 2009-2026 Robin Stuart <rstuart114@gmail.com>
 
     Redistribution and use in source and binary forms, with or without
     modification, are permitted provided that the following conditions
@@ -352,7 +352,8 @@ static int hx_in_fourbyte(const unsigned int ddata[], const int length, const in
 #define HX_NUM_MODES 7
 
 /* Calculate optimized encoding modes. Adapted from Project Nayuki */
-/* Copyright (c) Project Nayuki. (MIT License) See qr.c for detailed notice */
+/* Copyright (c) 2019 Project Nayuki. (MIT License) See qr.c for detailed notice */
+/* SPDX-License-Identifier: MIT */
 static void hx_define_modes(char *modes, const unsigned int ddata[], const int length, const int debug_print) {
     /* Must be in same order as HX_N etc */
     static const char mode_types[] = { 'n', 't', 'b', '1', '2', 'd', 'f', '\0' };
@@ -1530,8 +1531,8 @@ INTERNAL int zint_hanxin(struct zint_symbol *symbol, struct zint_seg segs[], con
             if (!done) {
                 /* Try GB 18030 */
                 int error_number = zint_gb18030_utf8(symbol, local_segs[i].source, &local_segs[i].length, dd);
-                if (error_number != 0) {
-                    return error_number;
+                if (error_number != 0) { /* Shouldn't happen */
+                    return error_number; /* Not reached */
                 }
                 if (local_segs[i].eci != 32) {
                     warn_number = z_errtxt(ZINT_WARN_NONCOMPLIANT, symbol, 543,

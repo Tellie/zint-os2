@@ -1,6 +1,6 @@
 /*
     libzint - the open source barcode library
-    Copyright (C) 2019-2025 Robin Stuart <rstuart114@gmail.com>
+    Copyright (C) 2019-2026 Robin Stuart <rstuart114@gmail.com>
 
     Redistribution and use in source and binary forms, with or without
     modification, are permitted provided that the following conditions
@@ -30,9 +30,11 @@
 /*
  * Adapted from qrencode/tests/common.h
  * Copyright (C) 2006-2017 Kentaro Fukuchi <kentaro@fukuchi.org>
+ * originally licensed under LGPL-2.1+ but permission given to change to
+ * BSD-3-clause:
+ * https://sourceforge.net/p/zint/mailman/message/30810495/
  */
-/* Due to above: */
-/* SPDX-License-Identifier: LGPL-2.1+ */
+/* SPDX-License-Identifier: BSD-3-Clause */
 
 #ifndef Z_TESTCOMMON_H
 #define Z_TESTCOMMON_H
@@ -48,6 +50,19 @@ extern "C" {
 #define ZINT_DEBUG_TEST_PERFORMANCE     256
 #define ZINT_DEBUG_TEST_ZXINGCPP        512
 #define ZINT_DEBUG_TEST_BWIPP_ZXINGCPP  1024
+#define ZINT_DEBUG_TEST_AZTEC_SKIP_ALL  2048
+#define ZINT_DEBUG_TEST_PNG_FLUSH       4096
+
+#ifdef ZINT_SANITIZEM /* Suppress clang -fsanitize=memory false positives */
+#define ZINT_TESTUTIL_SANITIZEM_INIT     = {0}
+#define ZINT_TESTUTIL_SANITIZEM_INIT_2D  = {{0}}
+#else
+#define ZINT_TESTUTIL_SANITIZEM_INIT
+#define ZINT_TESTUTIL_SANITIZEM_INIT_2D
+#endif
+
+/* Hack `option_3` flag to indicate GS1 Syntax Engine caret input */
+#define ZINT_TESTUTIL_GS1CARET  (1 << 24)
 
 #include <errno.h>
 #include <stdio.h>
@@ -178,6 +193,7 @@ int testUtilDirExists(const char *dirname);
 int testUtilMkDir(const char *dirname);
 int testUtilRmDir(const char *dirname);
 int testUtilRename(const char *oldpath, const char *newpath);
+int testUtilCreateFile(const char *filename);
 int testUtilCreateROFile(const char *filename);
 int testUtilRmROFile(const char *filename);
 int testUtilReadFile(const char *filename, unsigned char *buffer, int buffer_size, int *p_size);
@@ -203,7 +219,7 @@ int testUtilVerifyTiffInfo(const char *filename, int debug);
 int testUtilCanBwipp(int index, const struct zint_symbol *symbol, int option_1, int option_2, int option_3,
             int debug);
 int testUtilBwipp(int index, const struct zint_symbol *symbol, int option_1, int option_2, int option_3,
-            const char *data, int length, const char *primary, char *buffer, int buffer_size, int *p_parsefnc);
+            const char *data, int length, const char *primary, char *buffer, int buffer_size, const int *p_parsefnc);
 int testUtilBwippSegs(int index, struct zint_symbol *symbol, int option_1, int option_2, int option_3,
             const struct zint_seg segs[], const int seg_count, const char *primary, char *buffer, int buffer_size);
 int testUtilBwippCmp(const struct zint_symbol *symbol, char *msg, char *cmp_buf, const char *expected);

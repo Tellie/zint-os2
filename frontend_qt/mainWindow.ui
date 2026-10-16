@@ -1558,9 +1558,12 @@ or import from file</string>
 &lt;tr&gt;&lt;td&gt;\v&amp;nbsp;&lt;/td&gt;&lt;td&gt;Vertical Tab (0x0B)&lt;/td&gt;&lt;/tr&gt;
 &lt;tr&gt;&lt;td&gt;\f&amp;nbsp;&lt;/td&gt;&lt;td&gt;Form Feed (0x0C)&lt;/td&gt;&lt;/tr&gt;
 &lt;tr&gt;&lt;td&gt;\r&amp;nbsp;&lt;/td&gt;&lt;td&gt;Carriage Return (0x0D)&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;\L&amp;nbsp;&lt;/td&gt;&lt;td&gt;Data Link Escape (0x10)&lt;/td&gt;&lt;/tr&gt;
 &lt;tr&gt;&lt;td&gt;\e&amp;nbsp;&lt;/td&gt;&lt;td&gt;Escape (0x1B)&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;\F&amp;nbsp;&lt;/td&gt;&lt;td&gt;File Separator (0x1C)&lt;/td&gt;&lt;/tr&gt;
 &lt;tr&gt;&lt;td&gt;\G&amp;nbsp;&lt;/td&gt;&lt;td&gt;Group Separator (0x1D)&lt;/td&gt;&lt;/tr&gt;
 &lt;tr&gt;&lt;td&gt;\R&amp;nbsp;&lt;/td&gt;&lt;td&gt;Record Separator (0x1E)&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;\N&amp;nbsp;&lt;/td&gt;&lt;td&gt;Unit Separator (0x1F)&lt;/td&gt;&lt;/tr&gt;
 &lt;tr&gt;&lt;td&gt;\(&amp;nbsp;&lt;/td&gt;&lt;td&gt;Opening parenthesis (0x28) ("GS1 ()" only) &lt;/td&gt;&lt;/tr&gt;
 &lt;tr&gt;&lt;td&gt;\)&amp;nbsp;&lt;/td&gt;&lt;td&gt;Closing parenthesis (0x29) ("GS1 ()" only) &lt;/td&gt;&lt;/tr&gt;
 &lt;tr&gt;&lt;td&gt;\\&amp;nbsp;&lt;/td&gt;&lt;td&gt;Backslash (0x5C)&lt;/td&gt;&lt;/tr&gt;
@@ -1594,14 +1597,43 @@ or import from file</string>
               </widget>
              </item>
              <item>
-              <widget class="QCheckBox" name="chkGS1Parens">
+              <widget class="QLabel" name="lblGS1Chks">
                <property name="toolTip">
-                <string>Process parentheses &quot;()&quot; instead of square brackets &quot;[]&quot;
-as delimiters for GS1 Application Identifiers
+                <string>GS1 options: &quot;()&quot; (Parentheses), Raw, No Check, Strict
 (ignored if disabled)</string>
                </property>
                <property name="text">
-                <string>GS1 &amp;()</string>
+                <string>GS1:</string>
+               </property>
+               <property name="alignment">
+                <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QCheckBox" name="chkGS1Parens">
+               <property name="toolTip">
+                <string>Process parentheses &quot;()&quot; instead of square brackets &quot;[]&quot;
+as delimiters for GS1 Application Identifiers (AIs)
+(ignored if disabled)</string>
+               </property>
+               <property name="text">
+                <string>&amp;()</string>
+               </property>
+               <property name="checked">
+                <bool>false</bool>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QCheckBox" name="chkGS1Raw">
+               <property name="toolTip">
+                <string>Process literally (no AI delimiters), parsing
+Group Separators (GS, ASCII 29, \G) as FNC1s
+(ignored if disabled)</string>
+               </property>
+               <property name="text">
+                <string>Ra&amp;w</string>
                </property>
                <property name="checked">
                 <bool>false</bool>
@@ -1616,7 +1648,7 @@ checks necessary for encodation are still performed)
 (ignored if disabled)</string>
                </property>
                <property name="text">
-                <string>GS1 &amp;No Check</string>
+                <string>&amp;No Check</string>
                </property>
                <property name="checked">
                 <bool>false</bool>
@@ -1626,13 +1658,13 @@ checks necessary for encodation are still performed)
              <item>
               <widget class="QCheckBox" name="chkGS1Strict">
                <property name="toolTip">
-                <string>Use GS1 Syntax Engine to
-strictly verify GS1 data,
+                <string>Use the GS1 Syntax Engine
+to strictly verify GS1 data,
 including GS1 Digital Link URIs
 (ignored if disabled)</string>
                </property>
                <property name="text">
-                <string>GS1 St&amp;rict</string>
+                <string>St&amp;rict</string>
                </property>
                <property name="checked">
                 <bool>false</bool>

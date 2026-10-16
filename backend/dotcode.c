@@ -1,7 +1,7 @@
 /* dotcode.c - Handles DotCode */
 /*
     libzint - the open source barcode library
-    Copyright (C) 2017-2025 Robin Stuart <rstuart114@gmail.com>
+    Copyright (C) 2017-2026 Robin Stuart <rstuart114@gmail.com>
 
     Redistribution and use in source and binary forms, with or without
     modification, are permitted provided that the following conditions
@@ -532,7 +532,7 @@ static int dc_encode_message(struct zint_symbol *symbol, const unsigned char sou
         if (symbol->output_options & READER_INIT) {
             codeword_array[ap++] = 109; /* FNC3 */
 
-        } else if (!gs1 && eci == 0 && length > 2 && z_is_twodigits(source, length, 0)) {
+        } else if (!gs1 && eci == 0 && length >= 2 && z_is_twodigits(source, length, 0)) {
             codeword_array[ap++] = 107; /* FNC1 */
 
         } else if (z_posn(lead_specials, source[0]) != -1) {
@@ -1214,9 +1214,11 @@ INTERNAL int zint_dotcode(struct zint_symbol *symbol, struct zint_seg segs[], co
     char *dot_array;
     unsigned char *masked_codeword_array;
 
-    if (symbol->eci > 811799) {
-        return z_errtxtf(ZINT_ERROR_INVALID_OPTION, symbol, 525, "ECI code '%d' out of range (0 to 811799)",
-                        symbol->eci);
+    for (i = 0; i < seg_count; i++) {
+        if (segs[i].eci > 811799) {
+            return z_errtxtf(ZINT_ERROR_INVALID_OPTION, symbol, 525, "ECI code '%d' out of range (0 to 811799)",
+                            segs[i].eci);
+        }
     }
 
     if (symbol->option_2 > 0) {
@@ -1275,6 +1277,8 @@ INTERNAL int zint_dotcode(struct zint_symbol *symbol, struct zint_seg segs[], co
     min_dots = 9 * (data_length + 3 + (data_length / 2)) + 2;
     min_area = min_dots * 2;
 
+    assert(min_area >= 38); /* (9 * (1 + 3 + 0) + 2 = 19) * 2 */
+
     if (width == 0) {
         /* Automatic sizing */
         /* Following Rule 3 (Section 5.2.2) and applying a recommended width to height ratio 3:2 */
@@ -1285,6 +1289,8 @@ INTERNAL int zint_dotcode(struct zint_symbol *symbol, struct zint_seg segs[], co
 
         height = (int) h;
         width = (int) w;
+
+        assert(height >= 5 && width >= 7); /* 38 * 0.666 = 25.308, 38 * 1.5 = 57 */
 
         if (((width + height) & 1) == 1) {
             if (width * height < min_area) {
@@ -1324,30 +1330,18 @@ INTERNAL int zint_dotcode(struct zint_symbol *symbol, struct zint_seg segs[], co
             height++;
         }
     }
+    assert(height >= 5 && width >= 5);
 
     if (debug_print) {
         printf("Width %d, Height %d\n", width, height);
     }
 
     if (height > 200 || width > 200) {
-        if (height > 200 && width > 200) {
-            ZEXT z_errtxtf(0, symbol, 526, "Resulting symbol size '%1$dx%2$d' (HxW) is too large (maximum 200x200)",
-                            height, width);
-        } else if (width > 200) {
+        if (width > 200) {
+            assert(height <= 200);
             z_errtxtf(0, symbol, 528, "Resulting symbol width '%d' is too large (maximum 200)", width);
         } else {
             z_errtxtf(0, symbol, 735, "Resulting symbol height '%d' is too large (maximum 200)", height);
-        }
-        return ZINT_ERROR_INVALID_OPTION;
-    }
-
-    if (height < 5 || width < 5) {
-        /* Note: this branch probably no longer reached */
-        assert(height >= 5 || width >= 5); /* If width < 5, min height is 19 */
-        if (width < 5) {
-            z_errtxtf(0, symbol, 529, "Resulting symbol width '%d' is too small (minimum 5)", width);
-        } else {
-            z_errtxtf(0, symbol, 736, "Resulting symbol height '%d' is too small (minimum 5)", height);
         }
         return ZINT_ERROR_INVALID_OPTION;
     }

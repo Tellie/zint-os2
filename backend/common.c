@@ -1,7 +1,7 @@
 /* common.c - Contains functions needed for a number of barcodes */
 /*
     libzint - the open source barcode library
-    Copyright (C) 2008-2025 Robin Stuart <rstuart114@gmail.com>
+    Copyright (C) 2008-2026 Robin Stuart <rstuart114@gmail.com>
 
     Redistribution and use in source and binary forms, with or without
     modification, are permitted provided that the following conditions
@@ -36,13 +36,13 @@
 #include "common.h"
 
 /* Converts a character 0-9, A-F to its equivalent integer value */
-INTERNAL int z_ctoi(const char source) {
-    if (z_isdigit(source))
-        return (source - '0');
-    if (source >= 'A' && source <= 'F')
-        return (source - 'A' + 10);
-    if (source >= 'a' && source <= 'f')
-        return (source - 'a' + 10);
+INTERNAL int z_ctoi(const char ch) {
+    if (z_isdigit(ch))
+        return (ch - '0');
+    if (ch >= 'A' && ch <= 'F')
+        return (ch - 'A' + 10);
+    if (ch >= 'a' && ch <= 'f')
+        return (ch - 'a' + 10);
     return -1;
 }
 
@@ -70,20 +70,34 @@ INTERNAL void z_to_upper(unsigned char source[], const int length) {
     }
 }
 
-/* Returns the number of times a character occurs in `source` */
-INTERNAL int z_chr_cnt(const unsigned char source[], const int length, const unsigned char c) {
+/* Returns the number of times a character `ch` occurs in `source` */
+INTERNAL int z_chr_cnt(const unsigned char source[], const int length, const unsigned char ch) {
     int count = 0;
     int i;
 
     for (i = 0; i < length; i++) {
-        count += source[i] == c;
+        count += source[i] == ch;
     }
     return count;
 }
 
+/* Zero-fill `dest` buffer, appending `source'. Returns no. of zeroes added */
+INTERNAL int z_zero_fill(const unsigned char source[], const int length, unsigned char *dest, const int dest_length) {
+    const int zeroes = dest_length - length;
+    if (zeroes >= 0) {
+        if (zeroes > 0) {
+            memset(dest, '0', zeroes);
+        }
+        memcpy(dest + zeroes, source, length);
+    } else {
+        memcpy(dest, source, length);
+    }
+    return zeroes;
+}
+
 /* Flag table for `is_chr()` and `z_not_sane()` */
 #define IS_CLS_F    (IS_CLI_F | IS_SIL_F)
-static const unsigned short flgs[256] = {
+static const unsigned short flags[256] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /*00-1F*/
                IS_SPC_F,            IS_C82_F,            IS_C82_F,            IS_HSH_F, /*20-23*/ /*  !"# */
                IS_CLS_F, IS_SIL_F | IS_C82_F,            IS_C82_F,            IS_C82_F, /*24-27*/ /* $%&' */
@@ -115,17 +129,17 @@ static const unsigned short flgs[256] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /*E0-FF*/
 };
 
-/* Whether a character matches `flg` */
-INTERNAL int z_is_chr(const unsigned int flg, const unsigned int c) {
-    return z_isascii(c) && (flgs[c] & flg);
+/* Whether a character `ch` matches `flag` */
+INTERNAL int z_is_chr(const unsigned int flag, const unsigned int ch) {
+    return z_isascii(ch) && (flags[ch] & flag); /* As `ch` passed as an int need to check it's ASCII */
 }
 
 /* Verifies if a string only uses valid characters, returning 1-based position in `source` if not, 0 for success */
-INTERNAL int z_not_sane(const unsigned int flg, const unsigned char source[], const int length) {
+INTERNAL int z_not_sane(const unsigned int flag, const unsigned char source[], const int length) {
     int i;
 
     for (i = 0; i < length; i++) {
-        if (!(flgs[source[i]] & flg)) {
+        if (!(flags[source[i]] & flag)) {
             return i + 1;
         }
     }
@@ -161,7 +175,7 @@ INTERNAL int z_posn(const char set_string[], const char data) {
 
     for (s = set_string; *s; s++) {
         if (data == *s) {
-            return s - set_string;
+            return (int) (s - set_string);
         }
     }
     return -1;
@@ -617,7 +631,8 @@ INTERNAL int z_is_upcean(const int symbology) {
 
 /* Whether `symbology` can have composite 2D component data */
 INTERNAL int z_is_composite(const int symbology) {
-    /* Note if change this must change "backend_qt/qzint.cpp" `takesGS1AIData()` also */
+    /* Note if change this must change "frontend/main.c" `is_composite()` and
+       "backend_qt/qzint.cpp" `takesGS1AIData()` also */
     return (symbology >= BARCODE_EANX_CC && symbology <= BARCODE_DBAR_EXPSTK_CC)
             || symbology == BARCODE_EAN8_CC || symbology == BARCODE_EAN13_CC;
 }
@@ -697,6 +712,7 @@ INTERNAL unsigned int z_decode_utf8(unsigned int *state, unsigned int *codep, co
 
         See https://bjoern.hoehrmann.de/utf-8/decoder/dfa/ for details.
      */
+    /* SPDX-License-Identifier: Apache-2.0 */
 
     static const unsigned char utf8d[] = {
         /* The first part of the table maps bytes to character classes that
@@ -775,20 +791,85 @@ INTERNAL int z_utf8_to_unicode(struct zint_symbol *symbol, const unsigned char s
     return 0;
 }
 
+/* Check if `source` starts with manual FNC1 in 1st or 2nd position, returning length of extra escape sequence if so,
+   else 0 */
+INTERNAL int z_extra_escape_position_fnc1(const unsigned char source[], const int length) {
+    if (length >= 3) {
+        if (source[0] == '\\' && source[1] == '^' && source[2] == '1') {
+            return 3;
+        }
+        if (length >= 4) {
+            if (z_isalpha(source[0]) && source[1] == '\\' && source[2] == '^' && source[3] == '1') {
+                return 4;
+            }
+            if (length >= 5) {
+                if (z_isdigit(source[0]) && z_isdigit(source[1]) && source[2] == '\\' && source[3] == '^'
+                        && source[4] == '1') {
+                    return 5;
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+/* Process `source` for extra escape sequences, placing result in `dest`, updating `p_length`, and setting `fncs` with
+   any found FNC1s. Sets `p_have_extra_escapes` if any sequences found. `eci` is checked to be ASCII-compatible (UTF-8
+   & single-byte ECIs, excl. Binary 899). On error sets `errtxt` & returns error no. */
+INTERNAL int z_extra_escapes(struct zint_symbol *symbol, const unsigned char source[], int *p_length, const int eci,
+                unsigned char *dest, char *fncs, int *p_have_extra_escapes) {
+    const int length = *p_length;
+    int i, j = 0;
+
+    if (eci == 20 || eci == 25 || eci >= 28) {
+        return z_errtxt(ZINT_ERROR_INVALID_OPTION, symbol, 716, "Extra Escape mode requires ASCII-compatible ECI");
+    }
+    for (i = 0; i < length; i++) {
+        if (source[i] == '\\' && i + 2 < length && source[i + 1] == '^') {
+            const unsigned char ch = source[i + 2];
+            if (ch == '1' || ch == '^') {
+                if (ch == '^') { /* Escape sequence '\^^' */
+                    dest[j++] = source[i++];
+                    dest[j++] = source[i++];
+                    /* Drop second '^' */
+                } else { /* ch == '1' FNC1 */
+                    i += 2;
+                    fncs[j] = 1;
+                    dest[j++] = '\x1D'; /* Manual FNC1 dummy */
+                }
+            } else {
+                return z_errtxtf(ZINT_ERROR_INVALID_DATA, symbol, 717, "Unrecognized extra escape \"\\^%c\"",
+                                !z_isascii(ch) || z_iscntrl(ch) ? '?' : ch);
+            }
+        } else {
+            dest[j++] = source[i];
+        }
+    }
+    if (j != length) {
+        assert(j > 0 && j < length);
+        dest[j] = '\0';
+        *p_length = j;
+        *p_have_extra_escapes = 1;
+    }
+
+    return 0;
+}
+
 /* Treats source as ISO/IEC 8859-1 and copies into `symbol->text`, converting to UTF-8. Control chars (incl. DEL) and
    non-ISO/IEC 8859-1 (0x80-9F) are replaced with spaces. Returns warning if truncated, else 0 */
 INTERNAL int z_hrt_cpy_iso8859_1(struct zint_symbol *symbol, const unsigned char source[], const int length) {
     int i, j;
     int warn_number = 0;
+    const int text_size = ARRAY_SIZE(symbol->text);
 
-    for (i = 0, j = 0; i < length && j < ARRAY_SIZE(symbol->text); i++) {
+    for (i = 0, j = 0; i < length && j < text_size; i++) {
         if (z_isascii(source[i])) {
             symbol->text[j++] = z_iscntrl(source[i]) ? ' ' : source[i];
         } else if (source[i] < 0xC0) {
             if (source[i] < 0xA0) { /* 0x80-0x9F not valid ISO/IEC 8859-1 */
                 symbol->text[j++] = ' ';
             } else {
-                if (j + 2 >= ARRAY_SIZE(symbol->text)) {
+                if (j + 2 >= text_size) {
                     warn_number = ZINT_WARN_HRT_TRUNCATED;
                     break;
                 }
@@ -796,7 +877,7 @@ INTERNAL int z_hrt_cpy_iso8859_1(struct zint_symbol *symbol, const unsigned char
                 symbol->text[j++] = source[i];
             }
         } else {
-            if (j + 2 >= ARRAY_SIZE(symbol->text)) {
+            if (j + 2 >= text_size) {
                 warn_number = ZINT_WARN_HRT_TRUNCATED;
                 break;
             }
@@ -804,7 +885,7 @@ INTERNAL int z_hrt_cpy_iso8859_1(struct zint_symbol *symbol, const unsigned char
             symbol->text[j++] = source[i] - 0x40;
         }
     }
-    if (j == ARRAY_SIZE(symbol->text)) {
+    if (j == text_size) {
         warn_number = ZINT_WARN_HRT_TRUNCATED;
         j--;
     }
@@ -849,7 +930,7 @@ INTERNAL void z_hrt_cpy_cat_nochk(struct zint_symbol *symbol, const unsigned cha
     symbol->text[total_length] = '\0';
 }
 
-/* Copy a single ASCII character into `symbol->text` (i.e. replaces content) */
+/* Copy a single ASCII character `ch` into `symbol->text` (i.e. replaces content) */
 INTERNAL void z_hrt_cpy_chr(struct zint_symbol *symbol, const char ch) {
     symbol->text[0] = ch;
     symbol->text_length = 1;
@@ -880,7 +961,11 @@ INTERNAL void z_hrt_printf_nochk(struct zint_symbol *symbol, const char *fmt, ..
 
     va_start(ap, fmt);
 
+#ifdef Z_NO_VSNPRINTF
     size = vsprintf((char *) symbol->text, fmt, ap);
+#else
+    size = vsnprintf((char *) symbol->text, sizeof(symbol->text), fmt, ap);
+#endif
 
     assert(size >= 0);
     assert(size < ARRAY_SIZE(symbol->text));
@@ -913,6 +998,24 @@ INTERNAL void z_hrt_conv_gs1_brackets_nochk(struct zint_symbol *symbol, const un
     symbol->text[length] = '\0';
 }
 
+#ifdef ZINT_TEST
+/* For testing content segment `calloc()`/`malloc()` failures */
+static int z_ct_fail_id = 0;
+static int z_ct_fail_at = 0;
+
+INTERNAL void zint_test_ct_set_fail(const int id, const int at) {
+    z_ct_fail_id = id;
+    z_ct_fail_at = at;
+}
+
+#define ct_calloc(id, num, sz)  (z_ct_fail_at > 0 && z_ct_fail_id == (id) && --z_ct_fail_at == 0 \
+                                    ? NULL : calloc(num, sz))
+#define ct_malloc(id, sz)       (z_ct_fail_at > 0 && z_ct_fail_id == (id) && --z_ct_fail_at == 0 ? NULL : malloc(sz))
+#else
+#define ct_calloc(id, num, sz)  calloc(num, sz)
+#define ct_malloc(id, sz)       malloc(sz)
+#endif
+
 /* Initialize `content_segs` for `seg_count` segments. On error sets `errtxt`, returning BARCODE_ERROR_MEMORY */
 INTERNAL int z_ct_init_segs(struct zint_symbol *symbol, const int seg_count) {
     int i;
@@ -920,7 +1023,8 @@ INTERNAL int z_ct_init_segs(struct zint_symbol *symbol, const int seg_count) {
     if (symbol->content_segs) {
         z_ct_free_segs(symbol);
     }
-    if (!(symbol->content_segs = (struct zint_seg *) calloc((size_t) seg_count, sizeof(struct zint_seg)))) {
+    if (!(symbol->content_segs
+            = (struct zint_seg *) ct_calloc(Z_CT_FAIL_ID_INIT_SEGS, (size_t) seg_count, sizeof(struct zint_seg)))) {
         return z_errtxt(ZINT_ERROR_MEMORY, symbol, 243, "Insufficient memory for content segs buffer");
     }
     for (i = 0; i < seg_count; i++) {
@@ -954,8 +1058,9 @@ static int ct_init_seg_source(struct zint_symbol *symbol, const int seg_idx, con
     assert(!symbol->content_segs[seg_idx].source);
     assert(length > 0);
 
-    if (!(symbol->content_segs[seg_idx].source = (unsigned char *) malloc((size_t) length))) {
-        return z_errtxt(ZINT_ERROR_MEMORY, symbol, 245, "Insufficient memory for content text source buffer");
+    if (!(symbol->content_segs[seg_idx].source
+            = (unsigned char *) ct_malloc(Z_CT_FAIL_ID_INIT_SEG_SRC, (size_t) length))) {
+        return z_errtxt(ZINT_ERROR_MEMORY, symbol, 245, "Insufficient memory for content segs source buffer");
     }
     return 0;
 }
@@ -982,10 +1087,51 @@ INTERNAL int z_ct_cpy_segs(struct zint_symbol *symbol, const struct zint_seg seg
     return 0;
 }
 
-/* Update the ECI of content seg `seg_idx` to `eci`, to reflect (feedback) the actual ECI used */
-INTERNAL void z_ct_set_seg_eci(struct zint_symbol *symbol, const int seg_idx, const int eci) {
+/* Process content seg `seg_idx` buffer for manual FNC1 extra escape sequences (which must exist),
+   and update its ECI to `eci`, if set, to reflect (feedback) the actual ECI used */
+INTERNAL void z_ct_set_seg_extra_escapes_eci(struct zint_symbol *symbol, const int seg_idx, const int eci) {
+    int i, j = 0;
+    unsigned char *source;
+    int length;
+
     assert(symbol->content_segs);
     assert(seg_idx >= 0 && seg_idx < symbol->content_seg_count);
+    assert(symbol->content_segs[seg_idx].source);
+
+    source = symbol->content_segs[seg_idx].source;
+    length = symbol->content_segs[seg_idx].length;
+
+    for (i = 0; i < length; i++) {
+        if (source[i] == '\\' && i + 2 < length && source[i + 1] == '^'
+                && (source[i + 2] == '1' || source[i + 2] == '^')) {
+            if (source[i + 2] == '^') { /* Escape sequence '\^^' */
+                source[j++] = source[i++];
+                source[j++] = source[i++];
+                /* Drop second '^' */
+            } else { /* source[i + 2] == '1' FNC1 */
+                /* Do not emit <GS> if FNC1 in 1st/2nd position */
+                if (seg_idx != 0 || j > 2 || (j == 1 && !z_isalpha(source[0]))
+                        || (j == 2 && (!z_isdigit(source[0]) || !z_isdigit(source[1]))) ) {
+                    source[j++] = '\x1D'; /* GS */
+                }
+                i += 2;
+            }
+        } else {
+            source[j++] = source[i];
+        }
+    }
+    assert(j > 0 && j < length);
+    symbol->content_segs[seg_idx].length = j;
+    if (eci) {
+        symbol->content_segs[seg_idx].eci = eci;
+    }
+}
+
+/* Update the ECI of content seg `seg_idx` to `eci`, to reflect (feedback) the actual ECI used */
+INTERNAL void z_ct_set_seg_eci(struct zint_symbol *symbol, const int seg_idx, const int eci) {
+    assert(seg_idx >= 0 && seg_idx < symbol->content_seg_count);
+    assert(eci);
+    assert(symbol->content_segs);
     symbol->content_segs[seg_idx].eci = eci;
 }
 
@@ -1013,6 +1159,9 @@ INTERNAL int z_ct_cpy_cat(struct zint_symbol *symbol, const unsigned char source
     if (z_ct_init_segs(symbol, 1 /*seg_count*/) || ct_init_seg_source(symbol, 0 /*seg_idx*/, total_length)) {
         return ZINT_ERROR_MEMORY; /* `z_ct_init_segs()` & `ct_init_seg_source()` only fail with OOM */
     }
+#ifdef ZINT_SANITIZEM /* Suppress clang-22 -fsanitize=memory false positive (seems unable to track `*s++ =`) */
+    memset(symbol->content_segs[0].source, 0, total_length);
+#endif
     s = symbol->content_segs[0].source;
     if (length > 0) {
         memcpy(s, source, (size_t) length);
@@ -1044,6 +1193,9 @@ INTERNAL int z_ct_cpy_iso8859_1(struct zint_symbol *symbol, const unsigned char 
     if (z_ct_init_segs(symbol, 1 /*seg_count*/) || ct_init_seg_source(symbol, 0 /*seg_idx*/, length + iso_cnt)) {
         return ZINT_ERROR_MEMORY; /* `z_ct_init_segs()` & `ct_init_seg_source()` only fail with OOM */
     }
+#ifdef ZINT_SANITIZEM /* Suppress clang-22 -fsanitize=memory false positive (seems unable to track `*s++ =`) */
+    memset(symbol->content_segs[0].source, 0, length + iso_cnt);
+#endif
     s = symbol->content_segs[0].source;
 
     for (i = 0; i < length; i++) {
@@ -1078,7 +1230,11 @@ INTERNAL int z_ct_printf_256(struct zint_symbol *symbol, const char *fmt, ...) {
 
     va_start(ap, fmt);
 
+#ifdef ZINT_IS_C89
     size = vsprintf((char *) symbol->content_segs[0].source, fmt, ap);
+#else
+    size = vsnprintf((char *) symbol->content_segs[0].source, 256, fmt, ap);
+#endif
 
     assert(size >= 0);
     assert(size < 256);

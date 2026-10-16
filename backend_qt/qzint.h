@@ -1,7 +1,7 @@
 /***************************************************************************
  *   Copyright (C) 2008 by BogDan Vatra                                    *
  *   bogdan@licentia.eu                                                    *
- *   Copyright (C) 2010-2025 Robin Stuart                                  *
+ *   Copyright (C) 2010-2026 Robin Stuart                                  *
  *                                                                         *
  *   This program is free software: you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -146,7 +146,8 @@ public:
 
     /* Type of border above/below/around barcode */
     int borderType() const; // `symbol->output_options | BARCODE_BIND | BARCODE_BOX | BARCODE_BIND_TOP`
-    void setBorderType(int borderTypeIndex);
+    void setBorderType(int borderTypeIndex); // Sets from comboBox index
+    void setBorderTypeValue(int borderType); // Sets literal value
 
     /* Size of border in X-dimensions */
     int borderWidth() const; // `symbol->border_width`
@@ -208,6 +209,10 @@ public:
     bool gs1NoCheck() const; // `symbol->input_mode | GS1NOCHECK_MODE`
     void setGS1NoCheck(bool gs1NoCheck);
 
+    /* Process as raw GS1 input (no brackets/parentheses), with separator GS for FNC1 */
+    bool gs1Raw() const; // `symbol->input_mode | GS1RAW_MODE`
+    void setGS1Raw(bool gs1Raw);
+
     /* Use GS1 Syntax Engine to validate GS1 data */
     bool gs1SyntaxEngine() const; // `symbol->input_mode | GS1SYNTAXENGINE_MODE`
     void setGS1SyntaxEngine(bool gs1SyntaxEngine);
@@ -242,6 +247,8 @@ public:
     int encodedOption1() const; // Read-only, encoded `option_1`
     int encodedOption2() const; // Read-only, encoded `option_2`
     int encodedOption3() const; // Read-only, encoded `option_3`
+    int encodedInputMode() const; // Read-only, `input_mode`
+    int encodedOutputOptions() const; // Read-only, `output_options`
 
 
     /* Legacy property getters/setters */
@@ -278,10 +285,10 @@ public:
     bool takesGS1AIData(int symbology = 0) const;
 
 
-    /* Error or warning returned by Zint on `render()` or `save_to_file()` */
+    /* Error or warning returned by Zint on `render()`, `save_to_file()` or `save_to_memfile()` */
     int getError() const;
 
-    /* Error message returned by Zint on `render()` or `save_to_file()` */
+    /* Error message returned by Zint on `render()`, `save_to_file()` or `save_to_memfile()` */
     const QString& lastError() const; // `symbol->errtxt`
 
     /* Whether `lastError()` set */
@@ -290,6 +297,10 @@ public:
 
     /* Encode and print barcode to file `filename`. Only sets `getError()` on error, not on warning */
     bool save_to_file(const QString& filename); // `ZBarcode_Print()`
+
+    /* Encode and print barcode to memory file `filename` (only the extension is used, to determine output format).
+       Only sets `getError()` on error, not on warning */
+    bool save_to_memfile(const QString& filename, QByteArray& data); // `ZBarcode_Print()` + BARCODE_MEMORY_FILE
 
     /* Encode and display barcode in `paintRect` using `painter`.
        Note: legacy argument `mode` is not used */
@@ -314,6 +325,12 @@ public:
        after a successful `render()`. Returns false if `scale()` zero or render is in error, otherwise true */
     bool getWidthHeightXdim(float x_dim, float &width_x_dim, float &height_x_dim) const;
 
+
+    /* Convert literal ECI to ECI combobox index */
+    static int ECIValueToECIIndex(const int eci);
+
+    /* Convert ECI combo index to literal ECI */
+    static int ECIIndexToECIValue(const int ECIIndex);
 
     /* Return the BARCODE_XXX name of `symbology` */
     static QString barcodeName(const int symbology); // `ZBarcode_BarcodeName()`
@@ -398,6 +415,7 @@ private:
     int m_eci;
     bool m_gs1parens;
     bool m_gs1nocheck;
+    bool m_gs1raw;
     bool m_gs1syntaxengine;
     bool m_reader_init;
     bool m_guard_whitespace;

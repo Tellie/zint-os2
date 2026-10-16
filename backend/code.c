@@ -1,7 +1,7 @@
-/* code.c - Handles Code 39, 39+, 93 and VIN */
+/* code.c - Handles Code 39 (incl. LOGMARS & HIBC), Extended Code 39 (39+), Code 93 and VIN */
 /*
     libzint - the open source barcode library
-    Copyright (C) 2008-2025 Robin Stuart <rstuart114@gmail.com>
+    Copyright (C) 2008-2026 Robin Stuart <rstuart114@gmail.com>
 
     Redistribution and use in source and binary forms, with or without
     modification, are permitted provided that the following conditions
@@ -68,56 +68,6 @@ static const char C39Table[43 + 1][10] = {
     {'1','2','1','1','2','1','2','1','1','1'} /* Start character (full 10), Stop character (first 9) */
 };
 
-/* Encoding the full ASCII character set in Code 39 (ISO/IEC 16388:2007 Table A.2) */
-static const char EC39Ctrl[128][2] = {
-    {'%','U'}, {'$','A'}, {'$','B'}, {'$','C'}, {'$','D'}, {'$','E'}, {'$','F'}, {'$','G'}, {'$','H'}, {'$','I'},
-    {'$','J'}, {'$','K'}, {'$','L'}, {'$','M'}, {'$','N'}, {'$','O'}, {'$','P'}, {'$','Q'}, {'$','R'}, {'$','S'},
-    {'$','T'}, {'$','U'}, {'$','V'}, {'$','W'}, {'$','X'}, {'$','Y'}, {'$','Z'}, {'%','A'}, {'%','B'}, {'%','C'},
-    {'%','D'}, {'%','E'}, {  " "  }, {'/','A'}, {'/','B'}, {'/','C'}, {'/','D'}, {'/','E'}, {'/','F'}, {'/','G'},
-    {'/','H'}, {'/','I'}, {'/','J'}, {'/','K'}, {'/','L'}, {  "-"  }, {  "."  }, {'/','O'}, {  "0"  }, {  "1"  },
-    {  "2"  }, {  "3"  }, {  "4"  }, {  "5"  }, {  "6"  }, {  "7"  }, {  "8"  }, {  "9"  }, {'/','Z'}, {'%','F'},
-    {'%','G'}, {'%','H'}, {'%','I'}, {'%','J'}, {'%','V'}, {  "A"  }, {  "B"  }, {  "C"  }, {  "D"  }, {  "E"  },
-    {  "F"  }, {  "G"  }, {  "H"  }, {  "I"  }, {  "J"  }, {  "K"  }, {  "L"  }, {  "M"  }, {  "N"  }, {  "O"  },
-    {  "P"  }, {  "Q"  }, {  "R"  }, {  "S"  }, {  "T"  }, {  "U"  }, {  "V"  }, {  "W"  }, {  "X"  }, {  "Y"  },
-    {  "Z"  }, {'%','K'}, {'%','L'}, {'%','M'}, {'%','N'}, {'%','O'}, {'%','W'}, {'+','A'}, {'+','B'}, {'+','C'},
-    {'+','D'}, {'+','E'}, {'+','F'}, {'+','G'}, {'+','H'}, {'+','I'}, {'+','J'}, {'+','K'}, {'+','L'}, {'+','M'},
-    {'+','N'}, {'+','O'}, {'+','P'}, {'+','Q'}, {'+','R'}, {'+','S'}, {'+','T'}, {'+','U'}, {'+','V'}, {'+','W'},
-    {'+','X'}, {'+','Y'}, {'+','Z'}, {'%','P'}, {'%','Q'}, {'%','R'}, {'%','S'}, {'%','T'}
-};
-
-/* Code 93 ANSI/AIM BC5-1995 Table 3 */
-static const char C93Ctrl[128][2] = {
-    {'b','U'}, {'a','A'}, {'a','B'}, {'a','C'}, {'a','D'}, {'a','E'}, {'a','F'}, {'a','G'}, {'a','H'}, {'a','I'},
-    {'a','J'}, {'a','K'}, {'a','L'}, {'a','M'}, {'a','N'}, {'a','O'}, {'a','P'}, {'a','Q'}, {'a','R'}, {'a','S'},
-    {'a','T'}, {'a','U'}, {'a','V'}, {'a','W'}, {'a','X'}, {'a','Y'}, {'a','Z'}, {'b','A'}, {'b','B'}, {'b','C'},
-    {'b','D'}, {'b','E'}, {  " "  }, {'c','A'}, {'c','B'}, {'c','C'}, {  "$"  }, {  "%"  }, {'c','F'}, {'c','G'},
-    {'c','H'}, {'c','I'}, {'c','J'}, {  "+"  }, {'c','L'}, {  "-"  }, {  "."  }, {  "/"  }, {  "0"  }, {  "1"  },
-    {  "2"  }, {  "3"  }, {  "4"  }, {  "5"  }, {  "6"  }, {  "7"  }, {  "8"  }, {  "9"  }, {'c','Z'}, {'b','F'},
-    {'b','G'}, {'b','H'}, {'b','I'}, {'b','J'}, {'b','V'}, {  "A"  }, {  "B"  }, {  "C"  }, {  "D"  }, {  "E"  },
-    {  "F"  }, {  "G"  }, {  "H"  }, {  "I"  }, {  "J"  }, {  "K"  }, {  "L"  }, {  "M"  }, {  "N"  }, {  "O"  },
-    {  "P"  }, {  "Q"  }, {  "R"  }, {  "S"  }, {  "T"  }, {  "U"  }, {  "V"  }, {  "W"  }, {  "X"  }, {  "Y"  },
-    {  "Z"  }, {'b','K'}, {'b','L'}, {'b','M'}, {'b','N'}, {'b','O'}, {'b','W'}, {'d','A'}, {'d','B'}, {'d','C'},
-    {'d','D'}, {'d','E'}, {'d','F'}, {'d','G'}, {'d','H'}, {'d','I'}, {'d','J'}, {'d','K'}, {'d','L'}, {'d','M'},
-    {'d','N'}, {'d','O'}, {'d','P'}, {'d','Q'}, {'d','R'}, {'d','S'}, {'d','T'}, {'d','U'}, {'d','V'}, {'d','W'},
-    {'d','X'}, {'d','Y'}, {'d','Z'}, {'b','P'}, {'b','Q'}, {'b','R'}, {'b','S'}, {'b','T'}
-};
-
-/* Code 93 ANSI/AIM BC5-1995 Table 2 */
-static const char C93Table[47][6] = {
-    {'1','3','1','1','1','2'}, {'1','1','1','2','1','3'}, {'1','1','1','3','1','2'}, {'1','1','1','4','1','1'},
-    {'1','2','1','1','1','3'}, {'1','2','1','2','1','2'}, {'1','2','1','3','1','1'}, {'1','1','1','1','1','4'},
-    {'1','3','1','2','1','1'}, {'1','4','1','1','1','1'}, {'2','1','1','1','1','3'}, {'2','1','1','2','1','2'},
-    {'2','1','1','3','1','1'}, {'2','2','1','1','1','2'}, {'2','2','1','2','1','1'}, {'2','3','1','1','1','1'},
-    {'1','1','2','1','1','3'}, {'1','1','2','2','1','2'}, {'1','1','2','3','1','1'}, {'1','2','2','1','1','2'},
-    {'1','3','2','1','1','1'}, {'1','1','1','1','2','3'}, {'1','1','1','2','2','2'}, {'1','1','1','3','2','1'},
-    {'1','2','1','1','2','2'}, {'1','3','1','1','2','1'}, {'2','1','2','1','1','2'}, {'2','1','2','2','1','1'},
-    {'2','1','1','1','2','2'}, {'2','1','1','2','2','1'}, {'2','2','1','1','2','1'}, {'2','2','2','1','1','1'},
-    {'1','1','2','1','2','2'}, {'1','1','2','2','2','1'}, {'1','2','2','1','2','1'}, {'1','2','3','1','1','1'},
-    {'1','2','1','1','3','1'}, {'3','1','1','1','1','2'}, {'3','1','1','2','1','1'}, {'3','2','1','1','1','1'},
-    {'1','1','2','1','3','1'}, {'1','1','3','1','2','1'}, {'2','1','1','1','3','1'}, {'1','2','1','2','2','1'},
-    {'3','1','2','1','1','1'}, {'3','1','1','1','2','1'}, {'1','2','2','2','1','1'}
-};
-
 /* Code 39 */
 INTERNAL int zint_code39(struct zint_symbol *symbol, unsigned char source[], int length) {
     int i;
@@ -174,7 +124,7 @@ INTERNAL int zint_code39(struct zint_symbol *symbol, unsigned char source[], int
 
     if (symbol->symbology == BARCODE_LOGMARS || symbol->symbology == BARCODE_HIBC_39) {
         /* LOGMARS and HIBC use wider 'wide' bars than normal Code 39 */
-        counter = d - dest;
+        counter = (int) (d - dest);
         for (i = 0; i < counter; i++) {
             if (dest[i] == '2') {
                 dest[i] = '3';
@@ -186,7 +136,7 @@ INTERNAL int zint_code39(struct zint_symbol *symbol, unsigned char source[], int
         printf("Barspaces: %.*s\n", (int) (d - dest), dest);
     }
 
-    z_expand(symbol, dest, d - dest);
+    z_expand(symbol, dest, (int) (d - dest));
 
     if (symbol->output_options & COMPLIANT_HEIGHT) {
         if (symbol->symbology == BARCODE_LOGMARS) {
@@ -239,6 +189,22 @@ INTERNAL int zint_code39(struct zint_symbol *symbol, unsigned char source[], int
 
 /* Extended Code 39 - ISO/IEC 16388:2007 Annex A */
 INTERNAL int zint_excode39(struct zint_symbol *symbol, unsigned char source[], int length) {
+    /* Encoding the full ASCII character set in Code 39 (ISO/IEC 16388:2007 Table A.2) */
+    static const char EC39Ctrl[128][2] = {
+        {'%','U'}, {'$','A'}, {'$','B'}, {'$','C'}, {'$','D'}, {'$','E'}, {'$','F'}, {'$','G'}, {'$','H'}, {'$','I'},
+        {'$','J'}, {'$','K'}, {'$','L'}, {'$','M'}, {'$','N'}, {'$','O'}, {'$','P'}, {'$','Q'}, {'$','R'}, {'$','S'},
+        {'$','T'}, {'$','U'}, {'$','V'}, {'$','W'}, {'$','X'}, {'$','Y'}, {'$','Z'}, {'%','A'}, {'%','B'}, {'%','C'},
+        {'%','D'}, {'%','E'}, {  " "  }, {'/','A'}, {'/','B'}, {'/','C'}, {'/','D'}, {'/','E'}, {'/','F'}, {'/','G'},
+        {'/','H'}, {'/','I'}, {'/','J'}, {'/','K'}, {'/','L'}, {  "-"  }, {  "."  }, {'/','O'}, {  "0"  }, {  "1"  },
+        {  "2"  }, {  "3"  }, {  "4"  }, {  "5"  }, {  "6"  }, {  "7"  }, {  "8"  }, {  "9"  }, {'/','Z'}, {'%','F'},
+        {'%','G'}, {'%','H'}, {'%','I'}, {'%','J'}, {'%','V'}, {  "A"  }, {  "B"  }, {  "C"  }, {  "D"  }, {  "E"  },
+        {  "F"  }, {  "G"  }, {  "H"  }, {  "I"  }, {  "J"  }, {  "K"  }, {  "L"  }, {  "M"  }, {  "N"  }, {  "O"  },
+        {  "P"  }, {  "Q"  }, {  "R"  }, {  "S"  }, {  "T"  }, {  "U"  }, {  "V"  }, {  "W"  }, {  "X"  }, {  "Y"  },
+        {  "Z"  }, {'%','K'}, {'%','L'}, {'%','M'}, {'%','N'}, {'%','O'}, {'%','W'}, {'+','A'}, {'+','B'}, {'+','C'},
+        {'+','D'}, {'+','E'}, {'+','F'}, {'+','G'}, {'+','H'}, {'+','I'}, {'+','J'}, {'+','K'}, {'+','L'}, {'+','M'},
+        {'+','N'}, {'+','O'}, {'+','P'}, {'+','Q'}, {'+','R'}, {'+','S'}, {'+','T'}, {'+','U'}, {'+','V'}, {'+','W'},
+        {'+','X'}, {'+','Y'}, {'+','Z'}, {'%','P'}, {'%','Q'}, {'%','R'}, {'%','S'}, {'%','T'}
+    };
     int i;
     unsigned char buffer[86 * 2 + 1] = {0};
     unsigned char *b = buffer;
@@ -261,7 +227,7 @@ INTERNAL int zint_excode39(struct zint_symbol *symbol, unsigned char source[], i
         memcpy(b, EC39Ctrl[source[i]], 2);
         b += EC39Ctrl[source[i]][1] ? 2 : 1;
     }
-    if (b - buffer > 86) {
+    if ((int) (b - buffer) > 86) {
         return z_errtxtf(ZINT_ERROR_TOO_LONG, symbol, 317,
                         "Input too long, requires %d symbol characters (maximum 86)", (int) (b - buffer));
     }
@@ -275,9 +241,9 @@ INTERNAL int zint_excode39(struct zint_symbol *symbol, unsigned char source[], i
     }
 
     /* Then send the buffer to the C39 function */
-    if ((error_number = zint_code39(symbol, buffer, b - buffer)) >= ZINT_ERROR) {
-        return error_number;
-    }
+    error_number = zint_code39(symbol, buffer, (int) (b - buffer));
+    /* Due to above checks & not using content segs, can only return warning (height) */
+    assert(error_number < ZINT_ERROR);
 
     if (saved_option_2 == 2) {
         symbol->option_2 = 2; /* Restore */
@@ -308,11 +274,42 @@ INTERNAL int zint_excode39(struct zint_symbol *symbol, unsigned char source[], i
 
 /* Code 93 is an advancement on Code 39 and the definition is a lot tighter */
 INTERNAL int zint_code93(struct zint_symbol *symbol, unsigned char source[], int length) {
+    /* Code 93 ANSI/AIM BC5-1995 Table 2 */
+    static const char C93Table[47][6] = {
+        {'1','3','1','1','1','2'}, {'1','1','1','2','1','3'}, {'1','1','1','3','1','2'}, {'1','1','1','4','1','1'},
+        {'1','2','1','1','1','3'}, {'1','2','1','2','1','2'}, {'1','2','1','3','1','1'}, {'1','1','1','1','1','4'},
+        {'1','3','1','2','1','1'}, {'1','4','1','1','1','1'}, {'2','1','1','1','1','3'}, {'2','1','1','2','1','2'},
+        {'2','1','1','3','1','1'}, {'2','2','1','1','1','2'}, {'2','2','1','2','1','1'}, {'2','3','1','1','1','1'},
+        {'1','1','2','1','1','3'}, {'1','1','2','2','1','2'}, {'1','1','2','3','1','1'}, {'1','2','2','1','1','2'},
+        {'1','3','2','1','1','1'}, {'1','1','1','1','2','3'}, {'1','1','1','2','2','2'}, {'1','1','1','3','2','1'},
+        {'1','2','1','1','2','2'}, {'1','3','1','1','2','1'}, {'2','1','2','1','1','2'}, {'2','1','2','2','1','1'},
+        {'2','1','1','1','2','2'}, {'2','1','1','2','2','1'}, {'2','2','1','1','2','1'}, {'2','2','2','1','1','1'},
+        {'1','1','2','1','2','2'}, {'1','1','2','2','2','1'}, {'1','2','2','1','2','1'}, {'1','2','3','1','1','1'},
+        {'1','2','1','1','3','1'}, {'3','1','1','1','1','2'}, {'3','1','1','2','1','1'}, {'3','2','1','1','1','1'},
+        {'1','1','2','1','3','1'}, {'1','1','3','1','2','1'}, {'2','1','1','1','3','1'}, {'1','2','1','2','2','1'},
+        {'3','1','2','1','1','1'}, {'3','1','1','1','2','1'}, {'1','2','2','2','1','1'}
+    };
+    /* Code 93 ANSI/AIM BC5-1995 Table 3 */
+    static const char C93Ctrl[128][2] = {
+        {'b','U'}, {'a','A'}, {'a','B'}, {'a','C'}, {'a','D'}, {'a','E'}, {'a','F'}, {'a','G'}, {'a','H'}, {'a','I'},
+        {'a','J'}, {'a','K'}, {'a','L'}, {'a','M'}, {'a','N'}, {'a','O'}, {'a','P'}, {'a','Q'}, {'a','R'}, {'a','S'},
+        {'a','T'}, {'a','U'}, {'a','V'}, {'a','W'}, {'a','X'}, {'a','Y'}, {'a','Z'}, {'b','A'}, {'b','B'}, {'b','C'},
+        {'b','D'}, {'b','E'}, {  " "  }, {'c','A'}, {'c','B'}, {'c','C'}, {  "$"  }, {  "%"  }, {'c','F'}, {'c','G'},
+        {'c','H'}, {'c','I'}, {'c','J'}, {  "+"  }, {'c','L'}, {  "-"  }, {  "."  }, {  "/"  }, {  "0"  }, {  "1"  },
+        {  "2"  }, {  "3"  }, {  "4"  }, {  "5"  }, {  "6"  }, {  "7"  }, {  "8"  }, {  "9"  }, {'c','Z'}, {'b','F'},
+        {'b','G'}, {'b','H'}, {'b','I'}, {'b','J'}, {'b','V'}, {  "A"  }, {  "B"  }, {  "C"  }, {  "D"  }, {  "E"  },
+        {  "F"  }, {  "G"  }, {  "H"  }, {  "I"  }, {  "J"  }, {  "K"  }, {  "L"  }, {  "M"  }, {  "N"  }, {  "O"  },
+        {  "P"  }, {  "Q"  }, {  "R"  }, {  "S"  }, {  "T"  }, {  "U"  }, {  "V"  }, {  "W"  }, {  "X"  }, {  "Y"  },
+        {  "Z"  }, {'b','K'}, {'b','L'}, {'b','M'}, {'b','N'}, {'b','O'}, {'b','W'}, {'d','A'}, {'d','B'}, {'d','C'},
+        {'d','D'}, {'d','E'}, {'d','F'}, {'d','G'}, {'d','H'}, {'d','I'}, {'d','J'}, {'d','K'}, {'d','L'}, {'d','M'},
+        {'d','N'}, {'d','O'}, {'d','P'}, {'d','Q'}, {'d','R'}, {'d','S'}, {'d','T'}, {'d','U'}, {'d','V'}, {'d','W'},
+        {'d','X'}, {'d','Y'}, {'d','Z'}, {'b','P'}, {'b','Q'}, {'b','R'}, {'b','S'}, {'b','T'}
+    };
+    static const char start_stop[7] = { '1','1','1','1','4','1','1' }; /* 1st 6 start, all 7 stop */
 
     /* SILVER includes the extra characters a, b, c and d to represent Code 93 specific
        shift characters 1, 2, 3 and 4 respectively. These characters are never used by
        `zint_code39()` and `excode39()` */
-
     int i;
     int h, weight, c, k, error_number = 0;
     int values[125]; /* 123 + 2 (Checks) */
@@ -341,7 +338,7 @@ INTERNAL int zint_code93(struct zint_symbol *symbol, unsigned char source[], int
     }
 
     /* Now we can check the true length of the barcode */
-    h = b - buffer;
+    h = (int) (b - buffer);
     if (h > 123) {
         return z_errtxtf(ZINT_ERROR_TOO_LONG, symbol, 332,
                         "Input too long, requires %d symbol characters (maximum 123)", h);
@@ -383,7 +380,7 @@ INTERNAL int zint_code93(struct zint_symbol *symbol, unsigned char source[], int
     }
 
     /* Start character */
-    memcpy(d, "111141", 6);
+    memcpy(d, start_stop, 6);
     d += 6;
 
     for (i = 0; i < h; i++, d += 6) {
@@ -391,10 +388,10 @@ INTERNAL int zint_code93(struct zint_symbol *symbol, unsigned char source[], int
     }
 
     /* Stop character */
-    memcpy(d, "1111411", 7);
+    memcpy(d, start_stop, 7);
     d += 7;
 
-    z_expand(symbol, dest, d - dest);
+    z_expand(symbol, dest, (int) (d - dest));
 
     if (symbol->output_options & COMPLIANT_HEIGHT) {
         /* ANSI/AIM BC5-1995 Section 2.6 minimum height 0.2" or 15% of symbol length, whichever is greater
@@ -504,7 +501,7 @@ INTERNAL int zint_vin(struct zint_symbol *symbol, unsigned char source[], int le
     memcpy(d, C39Table[43], 9);
     d += 9;
 
-    z_expand(symbol, dest, d - dest);
+    z_expand(symbol, dest, (int) (d - dest));
 
     z_hrt_cpy_nochk(symbol, source, length);
 

@@ -1,7 +1,7 @@
 /* code128.c - Handles Code 128 and GS1-128 */
 /*
     libzint - the open source barcode library
-    Copyright (C) 2008-2025 Robin Stuart <rstuart114@gmail.com>
+    Copyright (C) 2008-2026 Robin Stuart <rstuart114@gmail.com>
     Bugfixes thanks to Christian Sakowski and BogDan Vatra
 
     Redistribution and use in source and binary forms, with or without
@@ -158,7 +158,8 @@ static int c128_cost(const unsigned char source[], const int length, const int i
     const unsigned char ch = source[i];
     const char *const latch_len = prior_cset == 0 ? c128_start_latch_len[start_idx] : c128_latch_len[prior_cset];
     const int is_fnc1 = ch == '\x1D' && fncs[i];
-    const int can_c = is_fnc1 || (z_isdigit(ch) && z_isdigit(source[i + 1])); /* Assumes source NUL-terminated */
+    const int can_c = is_fnc1 ? i != 1 || !z_isalpha(source[0]) /* Don't use C if FNC1 in 2nd position after alpha */
+                                : (z_isdigit(ch) && z_isdigit(source[i + 1])); /* Assumes source NUL-terminated */
     const int manual_c_fail = !can_c && manuals[i] == C128_C0; /* C requested but not doable */
     int min_cost = 999999; /* Max possible cost less than 2 * 256 */
     int min_mode = 0;
@@ -226,7 +227,7 @@ static int c128_cost(const unsigned char source[], const int length, const int i
    https://github.com/bwipp/postscriptbarcode/pull/278 */
 static int c128_set_values(const unsigned char source[], const int length, const int start_idx,
             const char priority[C128_STATES], const char fncs[C128_MAX], const char manuals[C128_MAX],
-            int values[C128_VALUES_MAX], int *p_final_cset) {
+            int values[C128_VALUES_MAX], int *p_first_cset, int *p_final_cset) {
 
     short (*costs)[C128_STATES] = (short (*)[C128_STATES]) z_alloca(sizeof(*costs) * length);
     char (*modes)[C128_STATES] = (char (*)[C128_STATES]) z_alloca(sizeof(*modes) * length);
@@ -241,6 +242,10 @@ static int c128_set_values(const unsigned char source[], const int length, const
 
     if (costs[0][0] > C128_SYMBOL_MAX) { /* Total minimal cost (glyph count) */
         return costs[0][0];
+    }
+
+    if (p_first_cset) {
+        *p_first_cset = modes[0][0];
     }
 
     /* Output codewords into `values` */
@@ -297,6 +302,7 @@ static int c128_set_values(const unsigned char source[], const int length, const
 
 /* Helper to write out symbol, calculating check digit */
 static void c128_expand(struct zint_symbol *symbol, int values[C128_VALUES_MAX], int glyph_count) {
+    static const char stop[7] = { '2','3','3','1','1','1','2' };
     char dest[640]; /* (102 + 1 (check digit)) * 6 + 7 (Stop) = 625 */
     char *d = dest;
     int total_sum;
@@ -317,7 +323,7 @@ static void c128_expand(struct zint_symbol *symbol, int values[C128_VALUES_MAX],
     values[glyph_count++] = total_sum; /* For debug/test */
 
     /* Stop character */
-    memcpy(d, "2331112", 7);
+    memcpy(d, stop, 7);
     d += 7;
     values[glyph_count++] = 106; /* For debug/test */
 
@@ -336,7 +342,7 @@ static void c128_expand(struct zint_symbol *symbol, int values[C128_VALUES_MAX],
     }
 #endif
 
-    z_expand(symbol, dest, d - dest);
+    z_expand(symbol, dest, (int) (d - dest));
 }
 
 /* Helper to set `priority` array based on flags */
@@ -377,6 +383,7 @@ INTERNAL int zint_code128(struct zint_symbol *symbol, unsigned char source[], in
     char priority[C128_STATES];
     int values[C128_VALUES_MAX] = {0};
     int glyph_count;
+    int first_cset;
     unsigned char src_buf[C128_MAX + 1];
     unsigned char *src = source;
     const int ab_only = symbol->symbology == BARCODE_CODE128AB;
@@ -397,23 +404,27 @@ INTERNAL int zint_code128(struct zint_symbol *symbol, unsigned char source[], in
         char manual = 0;
         int j = 0;
         for (i = 0; i < length; i++) {
-            if (source[i] == '\\' && i + 2 < length && source[i + 1] == '^'
-                    && ((source[i + 2] >= '@' && source[i + 2] <= 'C') || source[i + 2] == '1'
-                        || source[i + 2] == '^')) {
-                if (source[i + 2] == '^') { /* Escape sequence '\^^' */
-                    manuals[j] = manual;
-                    src_buf[j++] = source[i++];
-                    manuals[j] = manual;
-                    src_buf[j++] = source[i++];
-                    /* Drop second '^' */
-                } else if (source[i + 2] == '1') { /* FNC1 */
-                    i += 2;
-                    fncs[j] = have_fnc1 = 1;
-                    manuals[j] = manual;
-                    src_buf[j++] = '\x1D'; /* Manual FNC1 dummy */
-                } else { /* Manual mode A/B/C/@ */
-                    i += 2;
-                    manual = source[i] == 'C' ? C128_C0 : source[i] - '@'; /* Assuming A0 = 1, B0 = 2 */
+            if (source[i] == '\\' && i + 2 < length && source[i + 1] == '^') {
+                const unsigned char ch = source[i + 2];
+                if ((ch >= '@' && ch <= 'C') || ch == '1' || ch == '^') {
+                    if (ch == '^') { /* Escape sequence '\^^' */
+                        manuals[j] = manual;
+                        src_buf[j++] = source[i++];
+                        manuals[j] = manual;
+                        src_buf[j++] = source[i++];
+                        /* Drop second '^' */
+                    } else if (ch == '1') { /* FNC1 */
+                        i += 2;
+                        fncs[j] = have_fnc1 = 1;
+                        manuals[j] = manual;
+                        src_buf[j++] = '\x1D'; /* Manual FNC1 dummy */
+                    } else { /* Manual mode A/B/C/@ */
+                        i += 2;
+                        manual = ch == 'C' ? C128_C0 : ch - '@'; /* Assuming A0 = 1, B0 = 2 */
+                    }
+                } else {
+                    return z_errtxtf(ZINT_ERROR_INVALID_DATA, symbol, 348, "Unrecognized extra escape \"\\^%c\"",
+                                    !z_isascii(ch) || z_iscntrl(ch) ? '?' : ch);
                 }
             } else {
                 manuals[j] = manual;
@@ -446,26 +457,30 @@ INTERNAL int zint_code128(struct zint_symbol *symbol, unsigned char source[], in
             have_a |= !mask_0x60;
             have_b |= mask_0x60 == 0x60;
         }
+    } else if (have_fnc1) {
+        have_a = have_b = have_c = 1;
+        for (i = 0; i < length; i++) {
+            have_extended |= src[i] & 0x80;
+        }
     } else {
         int prev_digit, digit = 0;
         for (i = 0; i < length; i++) {
             const unsigned char ch = src[i];
-            const int is_fnc1 = ch == '\x1D' && fncs[i];
-            if (!is_fnc1) {
-                const unsigned char mask_0x60 = ch & 0x60; /* 0 for (ch & 0x7F) < 32, 0x60 for (ch & 0x7F) >= 96 */
-                const int manual = manuals[i];
-                have_extended |= ch & 0x80;
-                have_a |= !mask_0x60 || manual == C128_A0;
-                have_b |= mask_0x60 == 0x60 || manual == C128_B0;
-                prev_digit = digit;
-                digit = z_isdigit(ch);
-                have_c |= prev_digit && digit;
-            }
+            const unsigned char mask_0x60 = ch & 0x60; /* 0 for (ch & 0x7F) < 32, 0x60 for (ch & 0x7F) >= 96 */
+            const int manual = manuals[i];
+            assert(!(ch == '\x1D' && fncs[i])); /* Can't be FNC1 */
+            have_extended |= ch & 0x80;
+            have_a |= !mask_0x60 || manual == C128_A0;
+            have_b |= mask_0x60 == 0x60 || manual == C128_B0;
+            prev_digit = digit;
+            digit = z_isdigit(ch);
+            have_c |= prev_digit && digit;
         }
     }
     c128_set_priority(priority, have_a, have_b, have_c, have_extended);
 
-    glyph_count = c128_set_values(src, length, start_idx, priority, fncs, manuals, values, NULL /*p_final_cset*/);
+    glyph_count = c128_set_values(src, length, start_idx, priority, fncs, manuals, values, &first_cset,
+                                    NULL /*p_final_cset*/);
 
     if (symbol->debug & ZINT_DEBUG_PRINT) {
         printf("Data (%d): %.*s", length, length >= 100 ? 1 : length >= 10 ? 2 : 3, " ");
@@ -484,6 +499,36 @@ INTERNAL int zint_code128(struct zint_symbol *symbol, unsigned char source[], in
 
     /* ISO/IEC 15417:2007 leaves dimensions/height as application specification */
 
+    /* Do content segs before HRT to deal with manual FNC1s in 1st position & 2nd position */
+    if (content_segs) {
+        if (have_fnc1) {
+            int mv_idx = 0;
+            assert(length > 0);
+            /* Remove manual FNC1 in 1st position */
+            if (fncs[0]) {
+                mv_idx = 1;
+            /* Remove manual FNC1 in 2nd position, alphabetic */
+            } else if (length > 1 && fncs[1] && z_isalpha(src[0])) {
+                mv_idx = 2;
+            /* Remove manual FNC1 in 2nd position, 2 digits */
+            } else if (first_cset == C128_C0 && length > 2 && fncs[2] && z_isdigit(src[0]) && z_isdigit(src[1])) {
+                mv_idx = 3;
+            }
+            if (mv_idx) {
+                memmove(src + (mv_idx - 1), src + mv_idx, length - mv_idx);
+                memmove(fncs + (mv_idx - 1), fncs + mv_idx, length - mv_idx);
+                length--;
+            }
+        }
+        if ((symbol->input_mode & 0x07) == DATA_MODE) {
+            if (z_ct_cpy(symbol, src, length)) {
+                return ZINT_ERROR_MEMORY; /* `z_ct_cpy()` only fails with OOM */
+            }
+        } else if (z_ct_cpy_iso8859_1(symbol, src, length)) {
+            return ZINT_ERROR_MEMORY; /* `z_ct_cpy_iso8859_1()` only fails with OOM */
+        }
+    }
+
     /* HRT */
     if (have_fnc1) {
         /* Remove any manual FNC1 dummies ('\x1D') */
@@ -496,16 +541,6 @@ INTERNAL int zint_code128(struct zint_symbol *symbol, unsigned char source[], in
         length = j;
     }
     error_number = z_hrt_cpy_iso8859_1(symbol, src, length); /* Returns warning only */
-
-    if (content_segs) {
-        if ((symbol->input_mode & 0x07) == DATA_MODE) {
-            if (z_ct_cpy(symbol, src, length)) {
-                return ZINT_ERROR_MEMORY; /* `z_ct_cpy()` only fails with OOM */
-            }
-        } else if (z_ct_cpy_iso8859_1(symbol, src, length)) {
-            return ZINT_ERROR_MEMORY; /* `z_ct_cpy_iso8859_1()` only fails with OOM */
-        }
-    }
 
     return error_number;
 }
@@ -539,7 +574,7 @@ INTERNAL int zint_gs1_128_cc(struct zint_symbol *symbol, unsigned char source[],
         symbol->row_height[separator_row] = 1;
     }
 
-    error_number = zint_gs1_verify(symbol, source, length, reduced, &reduced_length);
+    error_number = zint_gs1_verify(symbol, source, length, reduced, &reduced_length, 1 /*set_hrt*/);
     if (error_number >= ZINT_ERROR) {
         return error_number;
     }
@@ -550,7 +585,7 @@ INTERNAL int zint_gs1_128_cc(struct zint_symbol *symbol, unsigned char source[],
     c128_set_priority(priority, 0 /*have_a*/, 1 /*have_b*/, 1 /*have_c*/, 0 /*have_extended*/);
 
     glyph_count = c128_set_values(reduced, reduced_length, 1 /*start_idx*/, priority, fncs, manuals, values,
-                                    &final_cset);
+                                    NULL /*p_first_cset*/, &final_cset);
 
     if (symbol->debug & ZINT_DEBUG_PRINT) {
         printf("Data (%d): %.*s", reduced_length, reduced_length >= 100 ? 1 : reduced_length >= 10 ? 2 : 3, " ");
@@ -609,7 +644,7 @@ INTERNAL int zint_gs1_128_cc(struct zint_symbol *symbol, unsigned char source[],
         }
     }
 
-    if (reduced_length > 48) { /* GS1 General Specifications 5.4.4.3 */
+    if (reduced_length > 48) { /* GS1 General Specifications Release 26.0 5.4.4.3 Maximum symbol length */
         if (error_number == 0) { /* Don't overwrite any `zint_gs1_verify()` warning */
             error_number = z_errtxtf(ZINT_WARN_NONCOMPLIANT, symbol, 843,
                                     "Input too long, requires %d characters (maximum 48)", reduced_length);
@@ -617,7 +652,7 @@ INTERNAL int zint_gs1_128_cc(struct zint_symbol *symbol, unsigned char source[],
     }
 
     if (symbol->output_options & COMPLIANT_HEIGHT) {
-        /* GS1 General Specifications 21.0.1 5.12.3.2 table 2, including footnote (**):
+        /* GS1 General Specifications Release 26.0 5.12.3.2 Symbol specification table 2, including footnote (**):
            same as ITF-14: "in case of further space constraints" height 5.8mm / 1.016mm (X max) ~ 5.7;
            default 31.75mm / 0.495mm ~ 64.14 */
         const float min_height = 5.70866156f; /* 5.8 / 1.016 */
@@ -647,12 +682,7 @@ INTERNAL int zint_gs1_128_cc(struct zint_symbol *symbol, unsigned char source[],
                                 "Cannot use Reader Initialisation in GS1 mode, ignoring");
     }
 
-    /* Note won't overflow `text` buffer due to symbol character maximum restricted to C128_SYMBOL_MAX */
-    if (symbol->input_mode & GS1PARENS_MODE) {
-        z_hrt_cpy_nochk(symbol, source, length);
-    } else {
-        z_hrt_conv_gs1_brackets_nochk(symbol, source, length);
-    }
+    /* HRT set by `zint_gs1_verify()` */
 
     if (content_segs && z_ct_cpy(symbol, reduced, reduced_length)) {
         return ZINT_ERROR_MEMORY; /* `z_ct_cpy()` only fails with OOM */

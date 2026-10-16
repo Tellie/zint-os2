@@ -1,7 +1,7 @@
 /* 2of5inter.c - Handles Code 2 of 5 Interleaved */
 /*
     libzint - the open source barcode library
-    Copyright (C) 2008-2025 Robin Stuart <rstuart114@gmail.com>
+    Copyright (C) 2008-2026 Robin Stuart <rstuart114@gmail.com>
 
     Redistribution and use in source and binary forms, with or without
     modification, are permitted provided that the following conditions
@@ -36,15 +36,15 @@
 #include "common.h"
 #include "gs1.h"
 
-static const char C25InterTable[10][5] = {
-    {'1','1','3','3','1'}, {'3','1','1','1','3'}, {'1','3','1','1','3'}, {'3','3','1','1','1'},
-    {'1','1','3','1','3'}, {'3','1','3','1','1'}, {'1','3','3','1','1'}, {'1','1','1','3','3'},
-    {'3','1','1','3','1'}, {'1','3','1','3','1'}
-};
-
 /* Common to Interleaved, and to ITF-14, DP Leitcode, DP Identcode */
 INTERNAL int zint_c25_inter_common(struct zint_symbol *symbol, unsigned char source[], int length,
                 const int checkdigit_option, const int dont_set_height) {
+    static const char C25InterTable[10][5] = {
+        {'1','1','3','3','1'}, {'3','1','1','1','3'}, {'1','3','1','1','3'}, {'3','3','1','1','1'},
+        {'1','1','3','1','3'}, {'3','1','3','1','1'}, {'1','3','3','1','1'}, {'1','1','1','3','3'},
+        {'3','1','1','3','1'}, {'1','3','1','3','1'}
+    };
+    static const char stop_start[5] = { '3','1','1','1','1' }; /* 1st 3 stop, last 4 start */
     int i, j, error_number = 0;
     char dest[638]; /* 4 + (125 + 1) * 5 + 3 + 1 = 638 */
     char *d = dest;
@@ -77,7 +77,7 @@ INTERNAL int zint_c25_inter_common(struct zint_symbol *symbol, unsigned char sou
     }
 
     /* Start character */
-    memcpy(d, "1111", 4);
+    memcpy(d, stop_start + 1, 4);
     d += 4;
 
     for (i = 0; i < length; i += 2) {
@@ -93,10 +93,10 @@ INTERNAL int zint_c25_inter_common(struct zint_symbol *symbol, unsigned char sou
     }
 
     /* Stop character */
-    memcpy(d, "311", 3);
+    memcpy(d, stop_start, 3);
     d += 3;
 
-    z_expand(symbol, dest, d - dest);
+    z_expand(symbol, dest, (int) (d - dest));
 
     if (!dont_set_height) {
         if (symbol->output_options & COMPLIANT_HEIGHT) {
