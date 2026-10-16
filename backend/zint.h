@@ -392,11 +392,19 @@ extern "C" {
 #define ZINT_DEBUG_PRINT        0x0001  /* Print debug info (if any) to stdout */
 #define ZINT_DEBUG_TEST         0x0002  /* For internal test use only */
 
-#if defined(_WIN32) || defined(__OS2__)
+#ifdef _WIN32
 #  if defined(DLL_EXPORT) || defined(PIC) || defined(_USRDLL)
 #    define ZINT_EXTERN __declspec(dllexport)
-#  elif defined(ZINT_DLL) && !defined(__OS2__)
+#  elif defined(ZINT_DLL)
 #    define ZINT_EXTERN __declspec(dllimport)
+#  else
+#    define ZINT_EXTERN extern
+#  endif
+#elif defined(__OS2__)
+/* OS/2: no ELF visibility, symbols must be exported explicitly. CMake defines `zint_EXPORTS` when building the
+   shared library target; `__declspec(dllimport)` is not needed on OS/2 (the import library resolves them) */
+#  if defined(zint_EXPORTS) || defined(DLL_EXPORT) || defined(_USRDLL)
+#    define ZINT_EXTERN extern __declspec(dllexport)
 #  else
 #    define ZINT_EXTERN extern
 #  endif
