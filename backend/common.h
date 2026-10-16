@@ -94,7 +94,7 @@ typedef unsigned __int64 uint64_t;
 #  define ZINT_FORMAT_PRINTF(fmt_idx, first_idx)
 #endif
 
-#if defined(__GNUC__) && __GNUC__ >= 4 && !defined(ZINT_TEST) && !defined(__MINGW32__)
+#if defined(__GNUC__) && __GNUC__ >= 4 && !defined(ZINT_TEST) && !defined(__MINGW32__) && !defined(__OS2__)
 #  define INTERNAL __attribute__((__visibility__("hidden")))
 #elif defined(ZINT_TEST)
 #  define INTERNAL ZINT_EXTERN /* The test suite references INTERNAL functions, so they need to be exported */
@@ -102,7 +102,7 @@ typedef unsigned __int64 uint64_t;
 #  define INTERNAL
 #endif
 
-#if defined(__GNUC__) && __GNUC__ >= 4 && !defined(__MINGW32__)
+#if defined(__GNUC__) && __GNUC__ >= 4 && !defined(__MINGW32__) && !defined(__OS2__)
 #  define INTERNAL_DATA_EXTERN __attribute__((__visibility__("hidden"))) extern
 #  define INTERNAL_DATA __attribute__((__visibility__("hidden")))
 #else
