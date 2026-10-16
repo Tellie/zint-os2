@@ -23,6 +23,10 @@ if(MSVC)
     string(REPLACE ";" "\\;" env_path "$ENV{PATH}")
     set_tests_properties(qzint PROPERTIES ENVIRONMENT
         "CMAKE_CURRENT_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR};PATH=${CMAKE_BINARY_DIR}/backend/${CMAKE_BUILD_TYPE}\;${CMAKE_BINARY_DIR}/backend_qt/${CMAKE_BUILD_TYPE}\;${env_path}")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "OS2")
+    string(REPLACE ";" "\\;" env_path "$ENV{PATH}")
+    set_tests_properties(qzint PROPERTIES ENVIRONMENT
+        "PATH=${CMAKE_BINARY_DIR}/backend_qt\;${env_path}")
 else()
     set_tests_properties(qzint PROPERTIES ENVIRONMENT
         "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}/backend;PATH=${CMAKE_BINARY_DIR}/backend_qt:$ENV{PATH}")

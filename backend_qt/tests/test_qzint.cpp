@@ -656,8 +656,10 @@ private slots:
             << "test_save_to_file_segs.gif" << true;
         QTest::newRow("BARCODE_DATAMATRIX unknown format") << BARCODE_DATAMATRIX << "1234" << 0 << "" << 0
             << "test_save_to_file.ext" << false;
+#ifndef __OS2__ /* OS/2: non-ASCII file names depend on codepage/locale, skip */
         QTest::newRow("BARCODE_DATAMATRIX UTF8 gif") << BARCODE_DATAMATRIX << "1234" << 0 << "" << 0
-            << "test_save_to_file_τ.gif" << true;
+            << "test_save_to_file_\xCF\x84.gif" << true; /* Greek small tau (U+03C4) in UTF-8 */
+#endif
         QTest::newRow("BARCODE_DATAMATRIX too long (unknown format)") << BARCODE_DATAMATRIX << "1234" << 0 << "" << 0
             <<  "test_67890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890"
                 "1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890"
